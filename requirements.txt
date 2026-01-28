@@ -1,8 +1,4 @@
 discord.py
 flask
 python-dotenv
-re
-asyncio
 aiohttp
-time
-io
