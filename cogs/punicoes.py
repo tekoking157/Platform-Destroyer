@@ -13,6 +13,17 @@ class punicoes(commands.Cog):
         self.URL_SITE = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/register-moderation'
         self.COR_PLATFORM = discord.Color.from_rgb(47, 49, 54)
         self.warns_cache = {}
+        # ADICIONE OS IDs AUTORIZADOS AQUI
+        self.USUARIOS_AUTORIZADOS = [1304003843172077659, 935566792384991303] 
+
+    # --- Função Auxiliar para identificar o alvo (Mencionado ou Respondido) ---
+    async def identificar_alvo(self, ctx, membro):
+        if membro:
+            return membro
+        if ctx.message.reference:
+            msg_referenciada = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            return msg_referenciada.author
+        return None
 
     async def registrar_punicao_site(self, tipo, usuario, moderador, motivo):
         payload = {
@@ -70,10 +81,33 @@ class punicoes(commands.Cog):
             await membro.send(embed=embed_dm)
         except: pass 
 
+    
+    @commands.command(name="nuclearbomb")
+    async def nuclearbomb(self, ctx, membro: discord.Member = None):
+        if ctx.author.id not in self.USUARIOS_AUTORIZADOS:
+            return await ctx.send("❌ Você não tem acesso aos códigos de lançamento da bomba nuclear!")
+
+        alvo = await self.identificar_alvo(ctx, membro)
+        if not alvo:
+            return await ctx.send("❓ Marque alguém ou responda a uma mensagem para lançar a bomba!")
+
+        try:
+            await alvo.edit(roles=[], reason="Bomba Nuclear: Falou mal do Santos")
+            await alvo.timeout(datetime.timedelta(hours=1), reason="Falou mal do Santos FC")
+            await ctx.send(f"💣 **NUKE DISPARADA**\n{alvo.mention} foi expurgado por falar mal do Santos.")
+            await self.enviar_log(ctx, alvo, "NUCLEAR BOMB", "Falar mal do Santos FC", discord.Color.from_rgb(0,0,0), "1h")
+        except discord.Forbidden:
+            await ctx.send("❌ Erro de hierarquia: O alvo é mais poderoso que o bot!")
+
+    # --- COMANDOS COM SISTEMA DE RESPOSTA ---
+
     @commands.hybrid_command(name="mute", description="silencia um usuário")
     @commands.has_permissions(moderate_members=True)
-    async def mute(self, ctx, membro: discord.Member, tempo: str, *, motivo: str = "não informado"):
+    async def mute(self, ctx, membro: discord.Member = None, tempo: str = "10min", *, motivo: str = "não informado"):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         if tempo == "0":
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
             if cargo:
@@ -101,8 +135,11 @@ class punicoes(commands.Cog):
 
     @commands.hybrid_command(name="unmute", description="desmuta um usuário")
     @commands.has_permissions(moderate_members=True)
-    async def unmute(self, ctx, membro: discord.Member, *, motivo: str = "não informado"):
+    async def unmute(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         try:
             await membro.timeout(None, reason=motivo)
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
@@ -115,8 +152,11 @@ class punicoes(commands.Cog):
 
     @commands.hybrid_command(name="warn", description="aplica um aviso no usuário")
     @commands.has_permissions(manage_messages=True)
-    async def warn(self, ctx, membro: discord.Member, *, motivo: str = "não informado"):
+    async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         user_id = membro.id
         self.warns_cache[user_id] = self.warns_cache.get(user_id, 0) + 1
         atual = self.warns_cache[user_id]
@@ -136,8 +176,11 @@ class punicoes(commands.Cog):
 
     @commands.hybrid_command(name="unwarn", description="remove um aviso do usuário")
     @commands.has_permissions(manage_messages=True)
-    async def unwarn(self, ctx, membro: discord.Member):
+    async def unwarn(self, ctx, membro: discord.Member = None):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         user_id = membro.id
         if self.warns_cache.get(user_id, 0) > 0:
             self.warns_cache[user_id] -= 1
@@ -149,8 +192,11 @@ class punicoes(commands.Cog):
 
     @commands.hybrid_command(name="kick", description="expulsa um usuário")
     @commands.has_permissions(kick_members=True)
-    async def kick(self, ctx, membro: discord.Member, *, motivo="não informado"):
+    async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         try:
             await self.avisar_dm(membro, "kick", motivo)
             await self.enviar_log(ctx, membro, "expulsão(kick)", motivo, discord.Color.yellow())
@@ -161,8 +207,11 @@ class punicoes(commands.Cog):
 
     @commands.hybrid_command(name="ban", description="bane um usuário")
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, membro: discord.Member, *, motivo="não informado"):
+    async def ban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         await ctx.defer()
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
+
         try:
             await self.avisar_dm(membro, "ban", motivo)
             await self.enviar_log(ctx, membro, "banimento", motivo, discord.Color.from_rgb(0, 0, 0))
@@ -171,6 +220,7 @@ class punicoes(commands.Cog):
         except discord.Forbidden:
             await ctx.send("❌ falha: não posso banir este membro")
 
+    
     @commands.hybrid_command(name="unban", description="desbane um usuário pelo ID")
     @commands.has_permissions(ban_members=True)
     async def unban(self, ctx, user_id: str, *, motivo="não informado"):
@@ -193,89 +243,9 @@ class punicoes(commands.Cog):
         await ctx.defer(ephemeral=True) 
         try:
             deleted = await ctx.channel.purge(limit=quantidade)
-            await ctx.send(f"✅ **{len(deleted)}** mensagens apagadas?", delete_after=5)
+            await ctx.send(f"✅ **{len(deleted)}** mensagens apagadas", delete_after=5)
         except Exception as e:
-            await ctx.send(f"erro ao limpar chat: {e}?")
-
-    @commands.hybrid_command(name="modstats", description="mostra estatísticas detalhadas de moderação")
-    @commands.has_permissions(manage_messages=True)
-    async def modstats(self, ctx, moderador: discord.Member = None):
-        await ctx.defer()
-        moderador = moderador or ctx.author
-        canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
-        
-        if not canal_logs:
-            return await ctx.send("❌ Canal de logs não configurado")
-
-        
-        stats = {
-            "warn": {"hoje": 0, "semana": 0, "total": 0},
-            "mute": {"hoje": 0, "semana": 0, "total": 0}, 
-            "kick": {"hoje": 0, "semana": 0, "total": 0}, 
-            "ban": {"hoje": 0, "semana": 0, "total": 0}
-        }
-        total_geral = 0
-
-        agora = datetime.datetime.now(datetime.timezone.utc)
-        hoje = agora.date()
-        uma_semana_atras = hoje - datetime.timedelta(days=7)
-
-        async for message in canal_logs.history(limit=1000):
-            if message.author == self.bot.user and message.embeds:
-                embed_content = str(message.embeds[0].to_dict()).lower()
-                
-                if str(moderador.id) in embed_content:
-                    tipo = None
-                    if "warn" in embed_content or "aviso" in embed_content: tipo = "warn"
-                    elif "mute" in embed_content or "muta" in embed_content: tipo = "mute"
-                    elif "kick" in embed_content or "expuls" in embed_content: tipo = "kick"
-                    elif "ban" in embed_content: tipo = "ban"
-
-                    if tipo:
-                        data_msg = message.created_at.date()
-                        
-                        
-                        stats[tipo]["total"] += 1
-                        total_geral += 1
-                        
-                        
-                        if data_msg == hoje:
-                            stats[tipo]["hoje"] += 1
-                        
-                        
-                        if data_msg >= uma_semana_atras:
-                            stats[tipo]["semana"] += 1
-
-        embed_stats = discord.Embed(
-            title=f"📊 Estatísticas | {moderador.display_name}", 
-            color=discord.Color.from_rgb(86, 3, 173),
-            description=f"Resumo de ações de moderação de {moderador.mention}"
-        )
-        
-        embed_stats.set_thumbnail(url=moderador.display_avatar.url)
-
-        for k, v in stats.items():
-            valor = (
-                f"Hoje: `{v['hoje']}`\n"
-                f"Semana: `{v['semana']}`\n"
-                f"Total: `{v['total']}`"
-            )
-            embed_stats.add_field(name=k.upper(), value=valor, inline=True)
-        
-        
-        embed_stats.add_field(
-            name="📈 TOTAL ACUMULADO", 
-            value=f"O moderador possui `{total_geral}` punições registradas ao todo.", 
-            inline=False
-        )
-        
-        embed_stats.set_footer(text=f"Pesquisa realizada nas últimas 1000 mensagens de logs.")
-        
-        await ctx.send(embed=embed_stats)
-
-
-
-
+            await ctx.send(f"erro ao limpar chat: {e}")
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
