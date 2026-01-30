@@ -94,7 +94,7 @@ class punicoes(commands.Cog):
         try:
             await alvo.edit(roles=[], reason="Bomba Nuclear: Falou mal do Santos")
             await alvo.timeout(datetime.timedelta(hours=1), reason="Falou mal do Santos FC")
-            await ctx.send(f"💣 **NUKE DISPARADA**\n{alvo.mention} foi expurgado por falar mal do Santos.")
+            await ctx.send({alvo.mention} foi expurgado por falar mal do Santos.")
             await self.enviar_log(ctx, alvo, "NUCLEAR BOMB", "Falar mal do Santos FC", discord.Color.from_rgb(0,0,0), "1h")
         except discord.Forbidden:
             await ctx.send("❌ Erro de hierarquia: O alvo é mais poderoso que o bot!")
