@@ -73,7 +73,9 @@ class utilitarios(commands.Cog):
         self.bot = bot
         self.COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
         self.start_time = time.time()
-        self.afk_users = {} # {user_id: {"motivo": motivo, "tempo": timestamp}}
+        
+        
+        self.afk_users = {} 
 
     # --- SISTEMA DE AFK (EVENTO) ---
     @commands.Cog.listener()
@@ -81,14 +83,24 @@ class utilitarios(commands.Cog):
         if message.author.bot:
             return
 
-        # Remover AFK ao falar
+        
         if message.author.id in self.afk_users:
-            dados = self.afk_users.pop(message.author.id)
-            decorrido = int(time.time() - dados['tempo'])
-            tempo_str = str(datetime.timedelta(seconds=decorrido))
-            await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
+            dados = self.afk_users[message.author.id]
+            decorrido_total = time.time() - dados['tempo']
+            
+           
+            if decorrido_total > 7:
+                self.afk_users.pop(message.author.id)
+                tempo_str = str(datetime.timedelta(seconds=int(decorrido_total)))
+                
+                
+                try:
+                    await message.author.edit(nick=dados['nick_original'])
+                except: pass
 
-        # Avisar se alguém marcar um usuário AFK
+                await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
+
+        
         for membro in message.mentions:
             if membro.id in self.afk_users:
                 dados = self.afk_users[membro.id]
@@ -103,9 +115,22 @@ class utilitarios(commands.Cog):
 
     @commands.hybrid_command(name="afk", description="avisa que você ficará offline")
     async def afk(self, ctx, *, motivo: str = "não informado"):
-        self.afk_users[ctx.author.id] = {"motivo": motivo, "tempo": time.time()}
+        nick_original = ctx.author.display_name
+        novo_nick = f"[AFK] {nick_original}"[:32]
+
+        self.afk_users[ctx.author.id] = {
+            "motivo": motivo, 
+            "tempo": time.time(),
+            "nick_original": nick_original
+        }
+
+        
+        try:
+            await ctx.author.edit(nick=novo_nick)
+        except: pass
+
         embed = discord.Embed(
-            description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**\n\n*Mande uma mensagem para sair.*",
+            description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**\n\n*Mande uma mensagem após alguns segundos para sair.*",
             color=self.COR_PLATFORM
         )
         await ctx.send(embed=embed)
