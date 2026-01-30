@@ -32,7 +32,6 @@ class punicoes(commands.Cog):
             "applied_by_username": str(moderador),
             "reason": motivo
         }
-        # Corrigido: Usando a variável de ambiente para o token se necessário ou o token do bot
         headers = {"Content-Type": "application/json", "x-bot-token": str(self.bot.http.token)}
         try:
             async with aiohttp.ClientSession() as session:
@@ -54,14 +53,13 @@ class punicoes(commands.Cog):
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
         if not canal: return
 
-        # ALTERAÇÃO: Título agora contém o nome do usuário e removemos o campo separado
+        
         titulo = f"| {acao.upper()} - {membro}"
         embed = discord.Embed(title=titulo, color=cor, timestamp=datetime.datetime.now())
         
         avatar_url = membro.display_avatar.url if hasattr(membro, 'display_avatar') else self.bot.user.display_avatar.url
         embed.set_thumbnail(url=avatar_url)
         
-        # Campo de usuário removido conforme solicitado, ID movido para o rodapé
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
         if "muta" in acao.lower():
             embed.add_field(name="| duração", value=duracao, inline=False)
@@ -91,10 +89,9 @@ class punicoes(commands.Cog):
             return await ctx.send("❓ Marque alguém ou responda para lançar a bomba!")
 
         try:
-            # Corrigido: Membros precisam de roles=[], mas o timeout deve vir antes se for tirar todas as roles
             await alvo.edit(roles=[], reason="Bomba Nuclear: Falou mal do Santos")
             await alvo.timeout(datetime.timedelta(hours=1), reason="Falou mal do Santos FC")
-            await ctx.send(f"☢️ {alvo.mention} foi expurgado por falar mal do Santos.") # Corrigido f-string
+            await ctx.send(f"☢️ {alvo.mention} foi expurgado por falar mal do Santos.") 
             await self.enviar_log(ctx, alvo, "NUCLEAR BOMB", "Falar mal do Santos FC", discord.Color.from_rgb(0,0,0), "1h")
         except discord.Forbidden:
             await ctx.send("❌ Erro de hierarquia: O alvo é mais poderoso que o bot!")
@@ -156,8 +153,9 @@ class punicoes(commands.Cog):
         self.warns_cache[user_id] = self.warns_cache.get(user_id, 0) + 1
         atual = self.warns_cache[user_id]
         
+        
         await self.avisar_dm(membro, f"aviso(warn) [{atual}/3]", motivo)
-        await self.enviar_log(ctx, membro, f"aviso(warn) [{atual}/3]", motivo, discord.Color.orange())
+        await self.enviar_log(ctx, membro, f"warn [{atual}/3]", motivo, discord.Color.orange())
         
         if atual >= 3:
             self.warns_cache[user_id] = 0 
@@ -177,7 +175,7 @@ class punicoes(commands.Cog):
 
         try:
             await self.avisar_dm(membro, "kick", motivo)
-            await self.enviar_log(ctx, membro, "expulsão(kick)", motivo, discord.Color.yellow())
+            await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
             await membro.kick(reason=motivo)
             await ctx.send(f"o usuário {membro.mention} foi expulso")
         except discord.Forbidden:
@@ -191,7 +189,7 @@ class punicoes(commands.Cog):
 
         try:
             await self.avisar_dm(membro, "ban", motivo)
-            await self.enviar_log(ctx, membro, "banimento", motivo, discord.Color.from_rgb(0, 0, 0))
+            await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
             await membro.ban(reason=motivo)
             await ctx.send(f"o usuário {membro.mention} foi banido")
         except discord.Forbidden:
@@ -208,3 +206,4 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
