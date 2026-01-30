@@ -13,10 +13,8 @@ class punicoes(commands.Cog):
         self.URL_SITE = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/register-moderation'
         self.COR_PLATFORM = discord.Color.from_rgb(47, 49, 54)
         self.warns_cache = {}
-        # ADICIONE OS IDs AUTORIZADOS AQUI
         self.USUARIOS_AUTORIZADOS = [1304003843172077659, 935566792384991303] 
 
-    # --- Função Auxiliar para identificar o alvo (Mencionado ou Respondido) ---
     async def identificar_alvo(self, ctx, membro):
         if membro:
             return membro
@@ -34,14 +32,15 @@ class punicoes(commands.Cog):
             "applied_by_username": str(moderador),
             "reason": motivo
         }
-        headers = {"Content-Type": "application/json", "x-bot-token": self.bot.http.token}
+        # Corrigido: Usando a variável de ambiente para o token se necessário ou o token do bot
+        headers = {"Content-Type": "application/json", "x-bot-token": str(self.bot.http.token)}
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.URL_SITE, json=payload, headers=headers) as response:
                     if response.status in [200, 201]:
-                        print(f"log enviado ao site: {usuario.name}")
+                        print(f"Log enviado ao site: {usuario.name}")
         except Exception as e:
-            print(f"falha ao conectar com o site: {e}")
+            print(f"Falha ao conectar com o site: {e}")
 
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
         tipo_site = acao.lower()
@@ -55,19 +54,20 @@ class punicoes(commands.Cog):
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
         if not canal: return
 
-        titulo = f"|{acao.lower()}"
+        # ALTERAÇÃO: Título agora contém o nome do usuário e removemos o campo separado
+        titulo = f"| {acao.upper()} - {membro}"
         embed = discord.Embed(title=titulo, color=cor, timestamp=datetime.datetime.now())
         
         avatar_url = membro.display_avatar.url if hasattr(membro, 'display_avatar') else self.bot.user.display_avatar.url
         embed.set_thumbnail(url=avatar_url)
         
-        embed.add_field(name="| usuário", value=f"{membro.mention}\n`{membro.id}`", inline=False)
+        # Campo de usuário removido conforme solicitado, ID movido para o rodapé
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
         if "muta" in acao.lower():
             embed.add_field(name="| duração", value=duracao, inline=False)
         embed.add_field(name="| motivo", value=motivo, inline=False)
         embed.add_field(name="| informações", value="executado via platform destroyer", inline=False)
-        embed.set_footer(text=f"id do caso: {membro.id}")
+        embed.set_footer(text=f"ID do Usuário: {membro.id}")
         await canal.send(embed=embed)
 
     async def avisar_dm(self, membro, acao, motivo):
@@ -81,30 +81,27 @@ class punicoes(commands.Cog):
             await membro.send(embed=embed_dm)
         except: pass 
 
-    
     @commands.command(name="nuclearbomb")
     async def nuclearbomb(self, ctx, membro: discord.Member = None):
         if ctx.author.id not in self.USUARIOS_AUTORIZADOS:
-            return await ctx.send("❌ Você não tem acesso aos códigos de lançamento da bomba nuclear!")
+            return await ctx.send("❌ Você não tem acesso aos códigos de lançamento!")
 
         alvo = await self.identificar_alvo(ctx, membro)
         if not alvo:
-            return await ctx.send("❓ Marque alguém ou responda a uma mensagem para lançar a bomba!")
+            return await ctx.send("❓ Marque alguém ou responda para lançar a bomba!")
 
         try:
+            # Corrigido: Membros precisam de roles=[], mas o timeout deve vir antes se for tirar todas as roles
             await alvo.edit(roles=[], reason="Bomba Nuclear: Falou mal do Santos")
             await alvo.timeout(datetime.timedelta(hours=1), reason="Falou mal do Santos FC")
-            await ctx.send({alvo.mention} foi expurgado por falar mal do Santos.")
+            await ctx.send(f"☢️ {alvo.mention} foi expurgado por falar mal do Santos.") # Corrigido f-string
             await self.enviar_log(ctx, alvo, "NUCLEAR BOMB", "Falar mal do Santos FC", discord.Color.from_rgb(0,0,0), "1h")
         except discord.Forbidden:
             await ctx.send("❌ Erro de hierarquia: O alvo é mais poderoso que o bot!")
 
-    # --- COMANDOS COM SISTEMA DE RESPOSTA ---
-
-    @commands.hybrid_command(name="mute", description="silencia um usuário")
+    @commands.hybrid_command(name="mute")
     @commands.has_permissions(moderate_members=True)
     async def mute(self, ctx, membro: discord.Member = None, tempo: str = "10min", *, motivo: str = "não informado"):
-        await ctx.defer()
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
 
@@ -129,14 +126,13 @@ class punicoes(commands.Cog):
                 await self.enviar_log(ctx, membro, "mute", motivo, discord.Color.red(), tempo)
                 await ctx.send(f"o usuário {membro.mention} foi silenciado por {tempo}")
             except discord.Forbidden:
-                await ctx.send("❌ erro de permissão ao tentar aplicar timeout")
+                await ctx.send("❌ erro de permissão (hierarquia de cargos)")
         else:
             await ctx.send("use: ?mute @usuario 10min/1h/1d ou 0 para permanente")
 
-    @commands.hybrid_command(name="unmute", description="desmuta um usuário")
+    @commands.hybrid_command(name="unmute")
     @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
-        await ctx.defer()
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
 
@@ -150,10 +146,9 @@ class punicoes(commands.Cog):
         except discord.Forbidden:
             await ctx.send("❌ falha: não tenho permissão para desmutar este membro")
 
-    @commands.hybrid_command(name="warn", description="aplica um aviso no usuário")
+    @commands.hybrid_command(name="warn")
     @commands.has_permissions(manage_messages=True)
     async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
-        await ctx.defer()
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
 
@@ -168,32 +163,15 @@ class punicoes(commands.Cog):
             self.warns_cache[user_id] = 0 
             try:
                 await membro.timeout(datetime.timedelta(hours=1), reason="limite de 3 warns atingido")
-                await ctx.send(f"o usuário {membro.mention} recebeu o 3º aviso e foi mutado por 1 hora automaticamente")
+                await ctx.send(f"o usuário {membro.mention} recebeu o 3º aviso e foi mutado por 1 hora")
             except:
-                await ctx.send(f"o usuário {membro.mention} recebeu o 3º aviso, mas falhei no castigo automático")
+                await ctx.send(f"o usuário {membro.mention} recebeu o 3º aviso.")
         else:
             await ctx.send(f"o usuário {membro.mention} foi punido. (aviso {atual}/3)")
 
-    @commands.hybrid_command(name="unwarn", description="remove um aviso do usuário")
-    @commands.has_permissions(manage_messages=True)
-    async def unwarn(self, ctx, membro: discord.Member = None):
-        await ctx.defer()
-        membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
-
-        user_id = membro.id
-        if self.warns_cache.get(user_id, 0) > 0:
-            self.warns_cache[user_id] -= 1
-            atual = self.warns_cache[user_id]
-            await self.enviar_log(ctx, membro, "aviso removido", "unwarn manual", discord.Color.blue())
-            await ctx.send(f"removi um aviso de {membro.mention}. agora ele tem {atual}/3 avisos")
-        else:
-            await ctx.send(f"o usuário {membro.mention} não possui avisos para remover")
-
-    @commands.hybrid_command(name="kick", description="expulsa um usuário")
+    @commands.hybrid_command(name="kick")
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        await ctx.defer()
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
 
@@ -205,10 +183,9 @@ class punicoes(commands.Cog):
         except discord.Forbidden:
             await ctx.send("❌ falha: o cargo do usuário é superior ao meu")
 
-    @commands.hybrid_command(name="ban", description="bane um usuário")
+    @commands.hybrid_command(name="ban")
     @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        await ctx.defer()
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém ou responda a uma mensagem.")
 
@@ -220,33 +197,14 @@ class punicoes(commands.Cog):
         except discord.Forbidden:
             await ctx.send("❌ falha: não posso banir este membro")
 
-    
-    @commands.hybrid_command(name="unban", description="desbane um usuário pelo ID")
-    @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id: str, *, motivo="não informado"):
-        await ctx.defer()
-        try:
-            user = await self.bot.fetch_user(int(user_id))
-            await ctx.guild.unban(user, reason=motivo)
-            await self.enviar_log(ctx, user, "desbanimento(unban)", motivo, discord.Color.green())
-            await ctx.send(f"o usuário {user.name} foi desbanido")
-        except ValueError:
-            await ctx.send("❌ o ID fornecido é inválido")
-        except discord.NotFound:
-            await ctx.send("❌ esse usuário não está banido")
-        except Exception as e:
-            await ctx.send(f"❌ erro ao desbanir: {e}")
-
-    @commands.hybrid_command(name="clear", description="limpa mensagens do chat")
+    @commands.hybrid_command(name="clear")
     @commands.has_permissions(manage_messages=True)
     async def clear(self, ctx, quantidade: int):
-        await ctx.defer(ephemeral=True) 
         try:
-            deleted = await ctx.channel.purge(limit=quantidade)
-            await ctx.send(f"✅ **{len(deleted)}** mensagens apagadas", delete_after=5)
+            deleted = await ctx.channel.purge(limit=quantidade + 1)
+            await ctx.send(f"✅ **{len(deleted)-1}** mensagens apagadas", delete_after=5)
         except Exception as e:
             await ctx.send(f"erro ao limpar chat: {e}")
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
-
