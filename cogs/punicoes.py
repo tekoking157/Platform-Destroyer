@@ -55,7 +55,7 @@ class punicoes(commands.Cog):
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
         if not canal: return
 
-        titulo = f"| usuário {acao.lower()}"
+        titulo = f"|{acao.lower()}"
         embed = discord.Embed(title=titulo, color=cor, timestamp=datetime.datetime.now())
         
         avatar_url = membro.display_avatar.url if hasattr(membro, 'display_avatar') else self.bot.user.display_avatar.url
@@ -249,3 +249,4 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
