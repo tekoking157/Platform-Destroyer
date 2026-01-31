@@ -5,6 +5,7 @@ import datetime
 import re
 import asyncio
 import aiohttp
+import json
 
 # --- VIEW PARA O BOTÃO DE REMOVER PUNIÇÃO ---
 class PunicaoView(ui.View):
@@ -82,8 +83,10 @@ class punicoes(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.URL_SITE, json=payload, headers=headers) as resp:
-                    pass
-        except: pass
+                    if resp.status != 200:
+                        print(f"DEBUG: Falha ao registrar no site. Status: {resp.status}")
+        except Exception as e: 
+            print(f"DEBUG: Erro de conexão com Supabase: {e}")
 
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
         await self.registrar_punicao_site(acao.lower(), membro, ctx.author, motivo)
@@ -108,7 +111,7 @@ class punicoes(commands.Cog):
 
     # --- COMANDOS DE ESTATÍSTICAS E HISTÓRICO ---
 
-@commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
+    @commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
     async def modstats(self, ctx, moderador: discord.Member = None):
         moderador = moderador or ctx.author
         headers = {"x-bot-token": str(self.bot.http.token)}
@@ -123,9 +126,8 @@ class punicoes(commands.Cog):
                     embed.add_field(name="Kicks", value=f"`{data.get('kick', 0)}`", inline=True)
                     await ctx.send(embed=embed)
                 else:
-                    # Agora está alinhado corretamente dentro do else
-                    print(f"DEBUG: Erro na API. Status: {resp.status}")
-                    print(f"Corpo da resposta: {await resp.text()}") 
+                    print(f"DEBUG: Erro na API (Stats). Status: {resp.status}")
+                    print(f"Resposta: {await resp.text()}")
                     await ctx.send("❌ Não foi possível carregar as estatísticas.")
 
     @commands.hybrid_command(name="modlog", description="vê o histórico de punições de um usuário")
@@ -139,13 +141,14 @@ class punicoes(commands.Cog):
                     if not logs: return await ctx.send(f"✅ Nenhum registro encontrado para {usuario.name}.")
                     
                     descricao = ""
-                    for log in logs[:10]: # Mostra os últimos 10
+                    for log in logs[:10]:
                         data = log.get('created_at', 'Desconhecido')[:10]
                         descricao += f"**{log['action'].upper()}** - {data}\nMotivo: *{log['reason']}*\n\n"
                     
                     embed = discord.Embed(title=f"📜 Histórico: {usuario.name}", description=descricao, color=self.COR_PLATFORM)
                     await ctx.send(embed=embed)
                 else:
+                    print(f"DEBUG: Erro na API (Logs). Status: {resp.status}")
                     await ctx.send("❌ Erro ao buscar histórico no banco de dados.")
 
     # --- COMANDOS DE PUNIÇÃO ---
@@ -250,6 +253,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
