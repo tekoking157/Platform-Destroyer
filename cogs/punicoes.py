@@ -108,7 +108,7 @@ class punicoes(commands.Cog):
 
     # --- COMANDOS DE ESTATÍSTICAS E HISTÓRICO ---
 
-    @commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
+@commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
     async def modstats(self, ctx, moderador: discord.Member = None):
         moderador = moderador or ctx.author
         headers = {"x-bot-token": str(self.bot.http.token)}
@@ -123,6 +123,9 @@ class punicoes(commands.Cog):
                     embed.add_field(name="Kicks", value=f"`{data.get('kick', 0)}`", inline=True)
                     await ctx.send(embed=embed)
                 else:
+                    # Agora está alinhado corretamente dentro do else
+                    print(f"DEBUG: Erro na API. Status: {resp.status}")
+                    print(f"Corpo da resposta: {await resp.text()}") 
                     await ctx.send("❌ Não foi possível carregar as estatísticas.")
 
     @commands.hybrid_command(name="modlog", description="vê o histórico de punições de um usuário")
@@ -247,6 +250,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
