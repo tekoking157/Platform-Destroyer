@@ -88,16 +88,16 @@ class utilitarios(commands.Cog):
             dados = self.afk_users[message.author.id]
             decorrido_total = time.time() - dados['tempo']
             
-           
+            
             if decorrido_total > 7:
                 self.afk_users.pop(message.author.id)
                 tempo_str = str(datetime.timedelta(seconds=int(decorrido_total)))
-                
                 
                 try:
                     await message.author.edit(nick=dados['nick_original'])
                 except: pass
 
+                
                 await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
 
         
@@ -111,6 +111,7 @@ class utilitarios(commands.Cog):
                     description=f"💤 {membro.mention} está **AFK** no momento.\n\n**Motivo:** {motivo}\n**Desde:** <t:{timestamp}:R>",
                     color=self.COR_PLATFORM
                 )
+                
                 await message.reply(embed=embed, delete_after=15)
 
     @commands.hybrid_command(name="afk", description="avisa que você ficará offline")
@@ -124,7 +125,6 @@ class utilitarios(commands.Cog):
             "nick_original": nick_original
         }
 
-        
         try:
             await ctx.author.edit(nick=novo_nick)
         except: pass
@@ -133,8 +133,8 @@ class utilitarios(commands.Cog):
             description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**\n\n*Mande uma mensagem após alguns segundos para sair.*",
             color=self.COR_PLATFORM
         )
-        await ctx.send(embed=embed)
-
+        
+        await ctx.send(embed=embed, delete_after=10)
     @commands.hybrid_command(name="serverinfo", description="mostra informações detalhadas do servidor")
     async def serverinfo(self, ctx):
         g = ctx.guild
@@ -266,3 +266,4 @@ class utilitarios(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
