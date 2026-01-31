@@ -62,16 +62,17 @@ class seguranca(commands.Cog):
 
         gid = message.guild.id
         
-        # --- ANTI INVITE ---
+        # --- ANTI INVITE COM COOLDOWN ---
         if self.anti_invite_ativo.get(gid, False):
             invites = ["discord.gg/", "discord.com/invite/", "discord.me/", "discord.io/"]
             if any(invite in message.content.lower() for invite in invites):
                 try:
+                    await asyncio.sleep(0.5) # Delay preventivo
                     await message.delete()
                     return await message.channel.send(f"⚠️ {message.author.mention}, proibido enviar convites.", delete_after=3)
                 except: pass
 
-        # --- ANTI RAID (FLOOD) ---
+        # --- ANTI RAID (FLOOD) COM COOLDOWN ---
         if self.anti_raid_ativo.get(gid, False):
             if message.author.guild_permissions.manage_messages: 
                 return
@@ -87,18 +88,21 @@ class seguranca(commands.Cog):
 
             if len(self.spam_control[user_id]) > 5:
                 try:
+                    # Delay de 0.5s para não sobrecarregar a API/IP
+                    await asyncio.sleep(0.5) 
                     await message.delete() 
                     
                     if user_id not in self.spam_warned:
                         self.spam_warned.add(user_id)
                         await message.channel.send(f"❌ {message.author.mention}, pare de floodar!", delete_after=3)
                         
-                        # Espera 10 segundos antes de permitir outro aviso para evitar 429
-                        await asyncio.sleep(10)
+                        # Espera 15 segundos para poder avisar de novo
+                        await asyncio.sleep(15)
                         self.spam_warned.discard(user_id)
                 except discord.HTTPException as e:
-                    if e.status == 429: # Se tomar rate limit, para de tentar deletar
-                        print(f"DEBUG: Rate limit atingido em {message.guild.name}")
+                    if e.status == 429: # Rate limit crítico
+                        print(f"RATE LIMIT: Pausando deleções por 5s em {message.guild.name}")
+                        await asyncio.sleep(5)
                 except: pass
 
     @commands.Cog.listener()
