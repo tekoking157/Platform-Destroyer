@@ -4,8 +4,6 @@ from discord.ext import commands
 import datetime
 import re
 import asyncio
-import aiohttp
-import json
 
 # --- VIEW PARA O BOTÃO DE REMOVER PUNIÇÃO ---
 class PunicaoView(ui.View):
@@ -56,9 +54,6 @@ class punicoes(commands.Cog):
         self.bot = bot
         self.ID_CANAL_LOGS = 1465118342422593707
         self.ID_CARGO_MUTADO = 1465048090624135351
-        self.URL_SITE = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/register-moderation'
-        self.URL_STATS = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/get-moderator-stats'
-        self.URL_LOGS = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/get-user-logs'
         self.COR_PLATFORM = discord.Color.from_rgb(47, 49, 54)
         self.warns_cache = {}
         self.USUARIOS_AUTORIZADOS = [1304003843172077659, 935566792384991303] 
@@ -70,26 +65,7 @@ class punicoes(commands.Cog):
             return msg.author
         return None
 
-    async def registrar_punicao_site(self, tipo, usuario, moderador, motivo):
-        payload = {
-            "action": tipo, 
-            "discord_user_id": str(usuario.id),
-            "discord_username": str(usuario),
-            "applied_by_discord_id": str(moderador.id),
-            "applied_by_username": str(moderador),
-            "reason": motivo
-        }
-        headers = {"Content-Type": "application/json", "x-bot-token": str(self.bot.http.token)}
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.URL_SITE, json=payload, headers=headers) as resp:
-                    if resp.status != 200:
-                        print(f"DEBUG: Falha ao registrar no site. Status: {resp.status}")
-        except Exception as e: 
-            print(f"DEBUG: Erro de conexão com Supabase: {e}")
-
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
-        await self.registrar_punicao_site(acao.lower(), membro, ctx.author, motivo)
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
         if not canal: return
 
@@ -109,47 +85,68 @@ class punicoes(commands.Cog):
         view = PunicaoView(self, membro.id, acao)
         await canal.send(embed=embed, view=view)
 
-    # --- COMANDOS DE ESTATÍSTICAS E HISTÓRICO ---
+    # --- COMANDOS DE ESTATÍSTICAS (SCANNING DE CANAL) ---
 
-    @commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
+    @commands.hybrid_command(name="modstats", description="Estatísticas de um moderador via logs")
     async def modstats(self, ctx, moderador: discord.Member = None):
         moderador = moderador or ctx.author
-        headers = {"x-bot-token": str(self.bot.http.token)}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.URL_STATS}?moderator_id={moderador.id}", headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    embed = discord.Embed(title=f"📊 Estatísticas: {moderador.name}", color=self.COR_PLATFORM)
-                    embed.add_field(name="Warns", value=f"`{data.get('warn', 0)}`", inline=True)
-                    embed.add_field(name="Mutes", value=f"`{data.get('mute', 0)}`", inline=True)
-                    embed.add_field(name="Bans", value=f"`{data.get('ban', 0)}`", inline=True)
-                    embed.add_field(name="Kicks", value=f"`{data.get('kick', 0)}`", inline=True)
-                    await ctx.send(embed=embed)
-                else:
-                    print(f"DEBUG: Erro na API (Stats). Status: {resp.status}")
-                    print(f"Resposta: {await resp.text()}")
-                    await ctx.send("❌ Não foi possível carregar as estatísticas.")
+        await ctx.defer()
 
-    @commands.hybrid_command(name="modlog", description="vê o histórico de punições de um usuário")
+        canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
+        if not canal_logs: return await ctx.send("❌ Canal de logs não configurado.")
+
+        stats = {"WARN": 0, "MUTE": 0, "KICK": 0, "BAN": 0}
+        total = 0
+
+        async for message in canal_logs.history(limit=1000):
+            if message.author == self.bot.user and message.embeds:
+                embed = message.embeds[0]
+                if f"{moderador.id}" in str(embed.to_dict()):
+                    titulo = embed.title.upper() if embed.title else ""
+                    if "WARN" in titulo: stats["WARN"] += 1
+                    elif "MUTE" in titulo: stats["MUTE"] += 1
+                    elif "KICK" in titulo: stats["KICK"] += 1
+                    elif "BAN" in titulo: stats["BAN"] += 1
+                    total += 1
+
+        embed_stats = discord.Embed(title=f"📊 Estatísticas | {moderador.name}", color=self.COR_PLATFORM)
+        embed_stats.set_thumbnail(url=moderador.display_avatar.url)
+        for punicao, qtd in stats.items():
+            embed_stats.add_field(name=punicao, value=f"Total: `{qtd}`", inline=True)
+        embed_stats.add_field(name="📈 TOTAL", value=f"O moderador possui **{total}** punições.", inline=False)
+        embed_stats.set_footer(text="Pesquisa realizada nas últimas 1000 mensagens de logs.")
+        await ctx.send(embed=embed_stats)
+
+    @commands.hybrid_command(name="modlog", description="Histórico de um usuário via logs")
     async def modlog(self, ctx, usuario: discord.User = None):
         usuario = usuario or ctx.author
-        headers = {"x-bot-token": str(self.bot.http.token)}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.URL_LOGS}?user_id={usuario.id}", headers=headers) as resp:
-                if resp.status == 200:
-                    logs = await resp.json()
-                    if not logs: return await ctx.send(f"✅ Nenhum registro encontrado para {usuario.name}.")
-                    
-                    descricao = ""
-                    for log in logs[:10]:
-                        data = log.get('created_at', 'Desconhecido')[:10]
-                        descricao += f"**{log['action'].upper()}** - {data}\nMotivo: *{log['reason']}*\n\n"
-                    
-                    embed = discord.Embed(title=f"📜 Histórico: {usuario.name}", description=descricao, color=self.COR_PLATFORM)
-                    await ctx.send(embed=embed)
-                else:
-                    print(f"DEBUG: Erro na API (Logs). Status: {resp.status}")
-                    await ctx.send("❌ Erro ao buscar histórico no banco de dados.")
+        await ctx.defer()
+
+        canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
+        if not canal_logs: return await ctx.send("❌ Canal de logs não encontrado.")
+
+        historico = []
+        async for message in canal_logs.history(limit=1000):
+            if message.author == self.bot.user and message.embeds:
+                embed = message.embeds[0]
+                # Verifica se o ID do usuário está no rodapé ou no campo usuário
+                if f"{usuario.id}" in str(embed.to_dict()):
+                    data = message.created_at.strftime("%d/%m/%Y")
+                    acao = embed.title.replace("| ", "") if embed.title else "Ação"
+                    motivo = "Não informado"
+                    for field in embed.fields:
+                        if "| motivo" in field.name.lower():
+                            motivo = field.value
+                            break
+                    historico.append(f"📅 `{data}` - **{acao}**\n└ *Motivo: {motivo}*")
+
+        if not historico:
+            return await ctx.send(f"✅ Nenhum registro encontrado para {usuario.name} nos últimos logs.")
+
+        descricao = "\n\n".join(historico[:10]) # Mostra os 10 mais recentes
+        embed_log = discord.Embed(title=f"📜 Histórico | {usuario.name}", description=descricao, color=self.COR_PLATFORM)
+        embed_log.set_footer(text="Mostrando últimos registros encontrados nas 1000 mensagens de log.")
+        await ctx.send(embed=embed_log)
 
     # --- COMANDOS DE PUNIÇÃO ---
 
@@ -253,8 +250,5 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
-
-
-
 
 
