@@ -8,47 +8,44 @@ import aiohttp
 
 # --- VIEW PARA O BOTÃO DE REMOVER PUNIÇÃO ---
 class PunicaoView(ui.View):
-    def __init__(self, cog, membro_id, acao, original_ctx):
+    def __init__(self, cog, membro_id, acao):
         super().__init__(timeout=None)
         self.cog = cog
         self.membro_id = membro_id
         self.acao = acao.lower()
-        self.original_ctx = original_ctx
 
     @ui.button(label="Remover Punição", style=discord.ButtonStyle.danger, emoji="🔓")
     async def remover_punicao(self, interaction: discord.Interaction, button: ui.Button):
-        # Verificar se quem clicou tem permissão
         if not interaction.user.guild_permissions.moderate_members:
             return await interaction.response.send_message("❌ Você não tem permissão para remover punições.", ephemeral=True)
 
         guild = interaction.guild
-        membro = guild.get_member(self.membro_id) or await self.cog.bot.fetch_user(self.membro_id)
+        try:
+            membro = guild.get_member(self.membro_id) or await self.cog.bot.fetch_user(self.membro_id)
+        except:
+            return await interaction.response.send_message("❌ Usuário não encontrado.", ephemeral=True)
         
         try:
             if "ban" in self.acao:
                 await guild.unban(membro, reason=f"Removido via botão por {interaction.user}")
                 msg = f"✅ Banimento de {membro.name} removido."
-            
             elif "mute" in self.acao:
                 if isinstance(membro, discord.Member):
                     await membro.timeout(None, reason=f"Removido via botão por {interaction.user}")
                     cargo = guild.get_role(self.cog.ID_CARGO_MUTADO)
                     if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
                 msg = f"✅ Mute de {membro.mention} removido."
-
             elif "warn" in self.acao:
                 self.cog.warns_cache[self.membro_id] = 0
                 msg = f"✅ Avisos de {membro.mention} resetados."
-            
             else:
                 msg = "❌ Esta punição não pode ser revertida por este botão."
 
-            await interaction.response.send_message(msg, ephemeral=True)
             button.disabled = True
             button.label = "Punição Removida"
             button.style = discord.ButtonStyle.secondary
-            await interaction.message.edit(view=self)
-
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erro ao remover: {e}", ephemeral=True)
 
@@ -59,6 +56,8 @@ class punicoes(commands.Cog):
         self.ID_CANAL_LOGS = 1465118342422593707
         self.ID_CARGO_MUTADO = 1465048090624135351
         self.URL_SITE = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/register-moderation'
+        self.URL_STATS = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/get-moderator-stats'
+        self.URL_LOGS = 'https://otzrrxefahqeovfbonag.supabase.co/functions/v1/get-user-logs'
         self.COR_PLATFORM = discord.Color.from_rgb(47, 49, 54)
         self.warns_cache = {}
         self.USUARIOS_AUTORIZADOS = [1304003843172077659, 935566792384991303] 
@@ -83,7 +82,7 @@ class punicoes(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.URL_SITE, json=payload, headers=headers) as resp:
-                    if resp.status in [200, 201]: print(f"Log site: {usuario.name}")
+                    pass
         except: pass
 
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
@@ -104,16 +103,49 @@ class punicoes(commands.Cog):
         embed.add_field(name="| informações", value="executado via platform destroyer", inline=False)
         embed.set_footer(text=f"ID do Alvo: {membro.id}")
         
-        # Enviando com o botão
-        view = PunicaoView(self, membro.id, acao, ctx)
+        view = PunicaoView(self, membro.id, acao)
         await canal.send(embed=embed, view=view)
 
-    async def avisar_dm(self, membro, acao, motivo):
-        try:
-            embed = discord.Embed(title="aviso de punição", description=f"você recebeu um **{acao.lower()}** no servidor **platform destroyer**.", color=discord.Color.red())
-            embed.add_field(name="motivo:", value=motivo)
-            await membro.send(embed=embed)
-        except: pass 
+    # --- COMANDOS DE ESTATÍSTICAS E HISTÓRICO ---
+
+    @commands.hybrid_command(name="modstats", description="vê as estatísticas de um moderador")
+    async def modstats(self, ctx, moderador: discord.Member = None):
+        moderador = moderador or ctx.author
+        headers = {"x-bot-token": str(self.bot.http.token)}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self.URL_STATS}?moderator_id={moderador.id}", headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    embed = discord.Embed(title=f"📊 Estatísticas: {moderador.name}", color=self.COR_PLATFORM)
+                    embed.add_field(name="Warns", value=f"`{data.get('warn', 0)}`", inline=True)
+                    embed.add_field(name="Mutes", value=f"`{data.get('mute', 0)}`", inline=True)
+                    embed.add_field(name="Bans", value=f"`{data.get('ban', 0)}`", inline=True)
+                    embed.add_field(name="Kicks", value=f"`{data.get('kick', 0)}`", inline=True)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("❌ Não foi possível carregar as estatísticas.")
+
+    @commands.hybrid_command(name="modlog", description="vê o histórico de punições de um usuário")
+    async def modlog(self, ctx, usuario: discord.User = None):
+        usuario = usuario or ctx.author
+        headers = {"x-bot-token": str(self.bot.http.token)}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self.URL_LOGS}?user_id={usuario.id}", headers=headers) as resp:
+                if resp.status == 200:
+                    logs = await resp.json()
+                    if not logs: return await ctx.send(f"✅ Nenhum registro encontrado para {usuario.name}.")
+                    
+                    descricao = ""
+                    for log in logs[:10]: # Mostra os últimos 10
+                        data = log.get('created_at', 'Desconhecido')[:10]
+                        descricao += f"**{log['action'].upper()}** - {data}\nMotivo: *{log['reason']}*\n\n"
+                    
+                    embed = discord.Embed(title=f"📜 Histórico: {usuario.name}", description=descricao, color=self.COR_PLATFORM)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("❌ Erro ao buscar histórico no banco de dados.")
+
+    # --- COMANDOS DE PUNIÇÃO ---
 
     @commands.command(name="nuclearbomb")
     async def nuclearbomb(self, ctx, membro: discord.Member = None):
@@ -132,7 +164,6 @@ class punicoes(commands.Cog):
     async def mute(self, ctx, membro: discord.Member = None, tempo: str = "10min", *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("Mencione alguém.")
-        
         match = re.fullmatch(r"(\d+)(min|h|d)", tempo.lower())
         if match or tempo == "0":
             try:
@@ -147,7 +178,6 @@ class punicoes(commands.Cog):
                     await self.enviar_log(ctx, membro, "mute", motivo, discord.Color.red(), tempo)
                 await ctx.send(f"✅ {membro.mention} foi silenciado.")
             except: await ctx.send("❌ Erro ao aplicar mute.")
-        else: await ctx.send("Use: ?mute @user 10min")
 
     @commands.hybrid_command(name="unmute")
     @commands.has_permissions(moderate_members=True)
@@ -156,7 +186,7 @@ class punicoes(commands.Cog):
         try:
             await membro.timeout(None)
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
-            if cargo in membro.roles: await membro.remove_roles(cargo)
+            if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
             await self.enviar_log(ctx, membro, "unmute", motivo, discord.Color.green())
             await ctx.send(f"✅ {membro.mention} desmutado.")
         except: pass
@@ -165,6 +195,7 @@ class punicoes(commands.Cog):
     @commands.has_permissions(manage_messages=True)
     async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return
         uid = membro.id
         self.warns_cache[uid] = self.warns_cache.get(uid, 0) + 1
         atual = self.warns_cache[uid]
@@ -179,6 +210,7 @@ class punicoes(commands.Cog):
     @commands.has_permissions(manage_messages=True)
     async def unwarn(self, ctx, membro: discord.Member = None):
         membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return
         self.warns_cache[membro.id] = 0
         await self.enviar_log(ctx, membro, "unwarn", "Reset de avisos", discord.Color.green())
         await ctx.send(f"✅ Avisos de {membro.mention} resetados.")
@@ -215,5 +247,6 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
