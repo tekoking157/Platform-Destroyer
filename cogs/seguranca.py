@@ -14,7 +14,7 @@ class seguranca(commands.Cog):
         self.monitor_kick = {}
         self.monitor_cargos = {}
         self.spam_control = {}
-        self.spam_warned = set() # Novo: Armazena quem já foi avisado para não repetir
+        self.spam_warned = set() 
         self.anti_invite_ativo = {}
         self.anti_raid_ativo = {}
 
@@ -72,8 +72,7 @@ class seguranca(commands.Cog):
                 except: pass
 
         # --- ANTI RAID (FLOOD) ---
-        status_raid = self.anti_raid_ativo.get(gid, False)
-        if status_raid:
+        if self.anti_raid_ativo.get(gid, False):
             if message.author.guild_permissions.manage_messages: 
                 return
             
@@ -83,24 +82,23 @@ class seguranca(commands.Cog):
             if user_id not in self.spam_control:
                 self.spam_control[user_id] = []
             
-            # Mantém apenas mensagens dos últimos 5 segundos no histórico
             self.spam_control[user_id] = [t for t in self.spam_control[user_id] if (agora - t).total_seconds() < 5]
             self.spam_control[user_id].append(agora)
 
-            # Se exceder 5 mensagens em 5 segundos
             if len(self.spam_control[user_id]) > 5:
                 try:
-                    await message.delete() # Deleta todas as excedentes
+                    await message.delete() 
                     
-                    # Se ele ainda não foi avisado NESTE flood, avisa agora
                     if user_id not in self.spam_warned:
                         self.spam_warned.add(user_id)
                         await message.channel.send(f"❌ {message.author.mention}, pare de floodar!", delete_after=3)
                         
-                        # Espera 5 segundos e remove do cache de avisos para poder avisar de novo depois
-                        await asyncio.sleep(5)
-                        if user_id in self.spam_warned:
-                            self.spam_warned.remove(user_id)
+                        # Espera 10 segundos antes de permitir outro aviso para evitar 429
+                        await asyncio.sleep(10)
+                        self.spam_warned.discard(user_id)
+                except discord.HTTPException as e:
+                    if e.status == 429: # Se tomar rate limit, para de tentar deletar
+                        print(f"DEBUG: Rate limit atingido em {message.guild.name}")
                 except: pass
 
     @commands.Cog.listener()
