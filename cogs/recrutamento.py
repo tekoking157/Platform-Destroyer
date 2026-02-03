@@ -8,6 +8,20 @@ COR_AZUL = discord.Color.from_rgb(86, 3, 173)
 BANNER_GIF = "https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif"
 ID_CANAL_LOGS = 1465107040392446064 
 
+# CONFIGURAÇÃO DE ACESSO
+ID_CARGO_PERMITIDO = 1357569800947237000
+IDS_DONOS = [1304003843172077659, 935566792384991303] # Seus IDs autorizados
+
+# --- CHECK DE PERMISSÃO ---
+def e_dono_ou_cargo():
+    async def predicate(ctx):
+        tem_cargo = any(role.id == ID_CARGO_PERMITIDO for role in ctx.author.roles)
+        if ctx.author.id in IDS_DONOS or tem_cargo:
+            return True
+        await ctx.send("❌ Apenas o Dono ou cargos autorizados podem postar o recrutamento.", ephemeral=True)
+        return False
+    return commands.check(predicate)
+
 # --- 1. BOTÃO DE ABRIR O FORMULÁRIO ---
 class BotaoAbrirRecrutamento(ui.View):
     def __init__(self):
@@ -25,6 +39,11 @@ class BotoesAvaliacao(ui.View):
 
     @ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="✅", custom_id="btn_aprovar")
     async def aprovar(self, interaction: discord.Interaction, button: ui.Button):
+        # Verifica se quem avalia tem permissão
+        tem_cargo = any(role.id == ID_CARGO_PERMITIDO for role in interaction.user.roles)
+        if not tem_cargo and interaction.user.id not in IDS_DONOS:
+            return await interaction.response.send_message("❌ Você não tem permissão para avaliar formulários.", ephemeral=True)
+
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
         embed.title = "✅ formulário aprovado"
@@ -51,6 +70,10 @@ class BotoesAvaliacao(ui.View):
 
     @ui.button(label="Recusar", style=discord.ButtonStyle.danger, emoji="❌", custom_id="btn_recusar")
     async def recusar(self, interaction: discord.Interaction, button: ui.Button):
+        tem_cargo = any(role.id == ID_CARGO_PERMITIDO for role in interaction.user.roles)
+        if not tem_cargo and interaction.user.id not in IDS_DONOS:
+             return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.red()
         embed.title = "❌ formulário recusado"
@@ -94,7 +117,7 @@ class recrutamento(commands.Cog):
         self.bot = bot
 
     @commands.command(name="postar_recrutamento")
-    @commands.has_permissions(administrator=True)
+    @e_dono_ou_cargo() # Aplica a restrição que você pediu
     async def postar_recrutamento(self, ctx):
         embed = discord.Embed(
             title="🚀 RECRUTAMENTO | PLATFORM DESTROYER",
@@ -126,5 +149,6 @@ class recrutamento(commands.Cog):
 
 # --- FUNÇÃO SETUP ---
 async def setup(bot):
+    # Isso garante que os botões funcionem mesmo após o bot reiniciar
     bot.add_view(BotaoAbrirRecrutamento()) 
     await bot.add_cog(recrutamento(bot))
