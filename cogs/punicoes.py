@@ -18,6 +18,7 @@ def check_staff():
     async def predicate(ctx):
         USUARIOS_AUTORIZADOS = [1304003843172077659, 935566792384991303]
         if not ctx.guild: return False
+        tem_cargo = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles) if hasattr(ctx.author, 'roles') else False
         tem_cargo = any(role.id in IDS_STAFF_PERMITIDOS for role in ctx.author.roles)
         if ctx.author.id in USUARIOS_AUTORIZADOS or tem_cargo:
             return True
@@ -93,13 +94,21 @@ class punicoes(commands.Cog):
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
         if not canal: return
+        
         embed = discord.Embed(title=f"| {acao.upper()}", color=cor, timestamp=datetime.datetime.now())
         embed.add_field(name="| usuário", value=f"{membro.mention}\n`{membro.id}`", inline=False)
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
         if "muta" in acao.lower(): embed.add_field(name="| duração", value=duracao, inline=False)
         embed.add_field(name="| motivo", value=motivo, inline=False)
         embed.set_footer(text=f"ID do Alvo: {membro.id}")
-        await canal.send(embed=embed, view=PunicaoView(self, membro.id, acao))
+        
+        # --- FILTRO DO BOTÃO ---
+        # Só envia a View se NÃO for um comando de 'un' (unban, unmute, unwarn)
+        view_enviar = None
+        if not acao.lower().startswith("un"):
+            view_enviar = PunicaoView(self, membro.id, acao)
+            
+        await canal.send(embed=embed, view=view_enviar)
 
     @commands.hybrid_command(name="modstats", description="Estatísticas detalhadas de um moderador")
     @check_staff()
@@ -273,6 +282,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
