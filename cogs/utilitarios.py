@@ -259,16 +259,10 @@ class utilitarios(commands.Cog):
         view = HelpView(self.bot, ["Ticket", "Jishaku", "Seguranca"])
         await ctx.send(embed=embed, view=view)
 
-    @commands.hybrid_command(name="manutencao", description="ativa/desativa o modo de manutenção")
-    async def manutencao(self, ctx, status: str):
-        if ctx.author.id != ID_DONO: return
-        self.bot.manutencao = (status.lower() == "on")
-        msg = "🚨 ATIVADO" if self.bot.manutencao else "✅ DESATIVADO"
-        await self.bot.change_presence(activity=discord.Game(name="⚠️ MANUTENÇÃO" if self.bot.manutencao else "Platform Destroyer"))
-        await ctx.send(f"Modo manutenção {msg}.")
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
