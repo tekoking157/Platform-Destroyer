@@ -51,19 +51,49 @@ class PlatformDestroyer(commands.Bot):
         print(f"📡 {self.quantidade_slash} comandos slash prontos para uso.")
         print(f"🌍 Atuando em {len(self.guilds)} servidor(es).")
         print("="*40 + "\n")
+        # Define a presença inicial
         await self.change_presence(activity=discord.Game(name="Platform Destroyer 2026"))
 
     async def on_message(self, message):
         if message.author.bot:
             return
 
+        # Trava de Manutenção para comandos de Prefixo
         if self.manutencao and message.author.id != MEU_ID:
             if message.content.startswith(self.command_prefix):
-                return await message.channel.send("🚧 **Modo Manutenção:** O bot está sendo atualizado e voltará em breve!", delete_after=5)
+                # Permite que o comando de manutenção ainda seja processado se for o caso
+                if f"{self.command_prefix}manutencao" not in message.content:
+                    return await message.channel.send("🚧 **Modo Manutenção:** O bot está sendo atualizado e voltará em breve!", delete_after=5)
         
         await self.process_commands(message)
 
+    async def on_interaction(self, interaction: discord.Interaction):
+        # Trava de Manutenção para comandos Slash
+        if self.manutencao and interaction.user.id != MEU_ID:
+            # Verifica se o comando não é o próprio de manutenção
+            if interaction.data.get('name') != "manutencao":
+                return await interaction.response.send_message("🚧 **Modo Manutenção:** O bot está sendo atualizado e voltará em breve!", ephemeral=True)
+        
+        await self.tree.process_interactions(interaction)
+
 bot = PlatformDestroyer()
+
+# --- 🛠️ COMANDO DE MANUTENÇÃO ---
+@bot.hybrid_command(name="manutencao", description="ativa/desativa o modo de manutenção")
+async def manutencao(ctx, status: str):
+    if ctx.author.id != MEU_ID: return
+    
+    status_lower = status.lower()
+    bot.manutencao = (status_lower == "on")
+    
+    if bot.manutencao:
+        msg = "🚨 ATIVADO"
+        await bot.change_presence(activity=discord.Game(name="⚠️ MANUTENÇÃO"))
+    else:
+        msg = "✅ DESATIVADO"
+        await bot.change_presence(activity=discord.Game(name="Platform Destroyer"))
+        
+    await ctx.send(f"Modo manutenção {msg}.")
 
 # --- 🔄 COMANDO DE RELOAD ---
 @bot.command(name="reload")
