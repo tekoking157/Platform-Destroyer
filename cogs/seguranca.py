@@ -4,14 +4,14 @@ import datetime
 import asyncio
 
 # CONFIGURAÇÕES ATUALIZADAS
-ID_CANAL_LOGS = 1357569804273324285 # ID do seu canal de logs oficial
+ID_CANAL_LOGS = 1357569804273324285 
 WHITELIST_USERS = [1304003843172077659, 935566792384991303] 
-# IDs de cargos que podem configurar o sistema e são imunes ao anti-raid
 IDS_CARGOS_PERMITIDOS = [1357569800947237000, 1414283694662750268, 1357569800947236998]
 COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
 
 def check_seguranca():
     async def predicate(ctx):
+        # Permite se for dono do bot, tiver cargo autorizado ou for administrador
         tem_cargo = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles)
         if ctx.author.id in WHITELIST_USERS or tem_cargo or ctx.author.guild_permissions.administrator:
             return True
@@ -31,7 +31,6 @@ class seguranca(commands.Cog):
         self.anti_spam_ativo = {}
 
     def verificar_limite(self, member, dicionario, limite=10, tempo=60):
-        # Proteção para não punir a si mesmo ou cargos altos
         if member.id in WHITELIST_USERS: return False
         if any(role.id in IDS_CARGOS_PERMITIDOS for role in member.roles): return False
         
@@ -58,6 +57,7 @@ class seguranca(commands.Cog):
     @commands.hybrid_command(name="antiinvite", description="Liga/Desliga bloqueio de convites")
     @check_seguranca()
     async def antiinvite(self, ctx, status: str):
+        """Uso: ?antiinvite on/off"""
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_invite_ativo[ctx.guild.id] = (status == "on")
@@ -67,6 +67,7 @@ class seguranca(commands.Cog):
     @commands.hybrid_command(name="antispam", description="Liga/Desliga anti-flood de mensagens")
     @check_seguranca()
     async def antispam(self, ctx, status: str):
+        """Uso: ?antispam on/off"""
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_spam_ativo[ctx.guild.id] = (status == "on")
@@ -76,8 +77,6 @@ class seguranca(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild: return
-        
-        # Ignora whitelist
         if message.author.id in WHITELIST_USERS or any(role.id in IDS_CARGOS_PERMITIDOS for role in message.author.roles):
             return
 
@@ -96,9 +95,7 @@ class seguranca(commands.Cog):
         if self.anti_spam_ativo.get(gid, False):
             agora = datetime.datetime.now()
             user_id = message.author.id
-            
-            if user_id not in self.spam_control:
-                self.spam_control[user_id] = []
+            if user_id not in self.spam_control: self.spam_control[user_id] = []
             
             self.spam_control[user_id] = [t for t in self.spam_control[user_id] if (agora - t).total_seconds() < 5]
             self.spam_control[user_id].append(agora)
@@ -121,7 +118,7 @@ class seguranca(commands.Cog):
             if self.verificar_limite(staff, self.monitor_ban, limite=5, tempo=60):
                 try:
                     await staff.edit(roles=[], reason="Anti-Raid: Mass Ban")
-                    await self.enviar_log(guild, staff, "Cargos removidos por Mass Ban.", discord.Color.red())
+                    await self.enviar_log(guild, staff, "Cargos removidos por Mass Ban (Tentativa de Raid).", discord.Color.red())
                 except: pass
 
     @commands.Cog.listener()
@@ -146,19 +143,13 @@ class seguranca(commands.Cog):
                 if staff.bot: return
                 if self.verificar_limite(staff, self.monitor_cargos, limite=3, tempo=60):
                     try:
-                        await staff.edit(roles=[], reason="Anti-Raid: Mass Role")
-                        await self.enviar_log(after.guild, staff, "Cargos removidos por Mass Role.", discord.Color.red())
+                        await staff.edit(roles=[], reason="Anti-Raid: Mass Role (Spam de Cargos)")
+                        await self.enviar_log(after.guild, staff, "Cargos removidos por Spam de Cargos.", discord.Color.red())
                     except: pass
 
 async def setup(bot):
     await bot.add_cog(seguranca(bot))
-                    try:
-                        await staff.edit(roles=[], reason="Anti-Raid: Spam de Cargos")
-                        await self.enviar_log(after.guild, staff, "Cargos removidos por Mass Role.", discord.Color.red())
-                    except: pass
 
-async def setup(bot):
-    await bot.add_cog(seguranca(bot))
 
 
 
