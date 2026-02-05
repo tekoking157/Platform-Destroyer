@@ -3,7 +3,6 @@ from discord.ext import commands
 import datetime
 import asyncio
 
-# CONFIGURAÇÕES ATUALIZADAS
 ID_CANAL_LOGS = 1357569804273324285 
 WHITELIST_USERS = [1304003843172077659, 935566792384991303] 
 IDS_CARGOS_PERMITIDOS = [1357569800947237000, 1414283694662750268, 1357569800947236998]
@@ -11,7 +10,6 @@ COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
 
 def check_seguranca():
     async def predicate(ctx):
-        # Permite se for dono do bot, tiver cargo autorizado ou for administrador
         tem_cargo = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles)
         if ctx.author.id in WHITELIST_USERS or tem_cargo or ctx.author.guild_permissions.administrator:
             return True
@@ -82,7 +80,6 @@ class seguranca(commands.Cog):
 
         gid = message.guild.id
         
-        # --- ANTI INVITE ---
         if self.anti_invite_ativo.get(gid, False):
             invites = ["discord.gg/", "discord.com/invite/", "discord.me/", "discord.io/"]
             if any(invite in message.content.lower() for invite in invites):
@@ -91,7 +88,6 @@ class seguranca(commands.Cog):
                     return await message.channel.send(f"⚠️ {message.author.mention}, proibido enviar convites.", delete_after=3)
                 except: pass
 
-        # --- ANTI SPAM (FLOOD) ---
         if self.anti_spam_ativo.get(gid, False):
             agora = datetime.datetime.now()
             user_id = message.author.id
@@ -112,43 +108,50 @@ class seguranca(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
+        await asyncio.sleep(0.5)
         async for entry in guild.audit_logs(action=discord.AuditLogAction.ban, limit=1):
             staff = entry.user
-            if staff.bot: return
+            if staff.bot or staff.id in WHITELIST_USERS: return
             if self.verificar_limite(staff, self.monitor_ban, limite=5, tempo=60):
                 try:
-                    await staff.edit(roles=[], reason="Anti-Raid: Mass Ban")
-                    await self.enviar_log(guild, staff, "Cargos removidos por Mass Ban (Tentativa de Raid).", discord.Color.red())
+                    if staff.top_role < guild.me.top_role:
+                        await staff.edit(roles=[], reason="Anti-Raid: Mass Ban")
+                        await self.enviar_log(guild, staff, "Remoção de cargos por Mass Ban.", discord.Color.red())
                 except: pass
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
+        await asyncio.sleep(0.5)
         guild = member.guild
         async for entry in guild.audit_logs(action=discord.AuditLogAction.kick, limit=1):
             if entry.target.id == member.id:
                 staff = entry.user
-                if staff.bot: return
+                if staff.bot or staff.id in WHITELIST_USERS: return
                 if self.verificar_limite(staff, self.monitor_kick, limite=5, tempo=60):
                     try:
-                        await staff.edit(roles=[], reason="Anti-Raid: Mass Kick")
-                        await self.enviar_log(guild, staff, "Cargos removidos por Mass Kick.", discord.Color.red())
+                        if staff.top_role < guild.me.top_role:
+                            await staff.edit(roles=[], reason="Anti-Raid: Mass Kick")
+                            await self.enviar_log(guild, staff, "Remoção de cargos por Mass Kick.", discord.Color.red())
                     except: pass
                 break
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if len(before.roles) < len(after.roles):
+            await asyncio.sleep(0.5)
             async for entry in after.guild.audit_logs(action=discord.AuditLogAction.member_role_update, limit=1):
                 staff = entry.user
-                if staff.bot: return
+                if staff.bot or staff.id in WHITELIST_USERS: return
                 if self.verificar_limite(staff, self.monitor_cargos, limite=3, tempo=60):
                     try:
-                        await staff.edit(roles=[], reason="Anti-Raid: Mass Role (Spam de Cargos)")
-                        await self.enviar_log(after.guild, staff, "Cargos removidos por Spam de Cargos.", discord.Color.red())
+                        if staff.top_role < after.guild.me.top_role:
+                            await staff.edit(roles=[], reason="Anti-Raid: Mass Role Update")
+                            await self.enviar_log(after.guild, staff, "Remoção de cargos por Spam de Cargos.", discord.Color.red())
                     except: pass
 
 async def setup(bot):
     await bot.add_cog(seguranca(bot))
+
 
 
 
