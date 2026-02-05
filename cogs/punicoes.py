@@ -10,7 +10,7 @@ IDS_STAFF_PERMITIDOS = [
     1431475496377389177,
     1414283452878028800,
     1414283694662750268,
-    1357569800947237000
+    1357569800947236998 # ID corrigido aqui (final 998)
 ]
 IDS_STAFF_LIMITADO = [1463174855904989428] 
 USUARIOS_SUPREMOS = [1304003843172077659, 935566792384991303]
@@ -116,6 +116,16 @@ class punicoes(commands.Cog):
             await ctx.send(f"❌ Eu não posso punir {membro.mention} (cargo superior ao meu).")
             return False
         return True
+
+    async def avisar_usuario(self, membro, acao, motivo, guild_name):
+        try:
+            embed = discord.Embed(title=f"⚠️ Você foi punido!", color=discord.Color.red())
+            embed.add_field(name="Servidor", value=guild_name, inline=False)
+            embed.add_field(name="Ação", value=acao.upper(), inline=False)
+            embed.add_field(name="Motivo", value=motivo, inline=False)
+            await membro.send(embed=embed)
+        except:
+            pass
 
     async def enviar_log(self, ctx, membro, acao, motivo, cor, duracao="não informado"):
         canal = ctx.guild.get_channel(self.ID_CANAL_LOGS)
@@ -229,6 +239,7 @@ class punicoes(commands.Cog):
         if ctx.interaction: await ctx.defer()
         
         try:
+            await self.avisar_usuario(membro, "mute", motivo, ctx.guild.name)
             if tempo == "0":
                 cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
                 if not cargo: return await ctx.send("❌ Cargo mutado não configurado.")
@@ -268,6 +279,7 @@ class punicoes(commands.Cog):
         if not await self.checar_hierarquia(ctx, membro): return
         self.warns_cache[membro.id] = self.warns_cache.get(membro.id, 0) + 1
         atual = self.warns_cache[membro.id]
+        await self.avisar_usuario(membro, f"warn [{atual}/3]", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, f"warn [{atual}/3]", motivo, discord.Color.orange())
         if atual >= 3:
             self.warns_cache[membro.id] = 0
@@ -291,6 +303,7 @@ class punicoes(commands.Cog):
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
+        await self.avisar_usuario(membro, "kick", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
         await membro.kick(reason=motivo)
         await ctx.send(f"✅ {membro.mention} expulso.\n**Motivo:** {motivo}")
@@ -302,6 +315,7 @@ class punicoes(commands.Cog):
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
+        await self.avisar_usuario(membro, "ban", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
         await ctx.send(f"✅ {membro.mention} banido.\n**Motivo:** {motivo}")
@@ -313,6 +327,7 @@ class punicoes(commands.Cog):
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
+        await self.avisar_usuario(membro, "IP BAN", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "IP BAN (7D)", motivo, discord.Color.dark_red())
         await membro.ban(reason=f"IP BAN: {motivo}", delete_message_days=7)
         await ctx.send(f"🚫 {membro.mention} banido por IP (7 dias de limpeza).\n**Motivo:** {motivo}")
