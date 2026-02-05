@@ -135,22 +135,33 @@ class seguranca(commands.Cog):
                     except: pass
                 break
 
-    @commands.Cog.listener()
+   @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if len(before.roles) < len(after.roles):
-            await asyncio.sleep(0.5)
+            if after.joined_at:
+                tempo_no_servidor = (datetime.datetime.now(datetime.timezone.utc) - after.joined_at).total_seconds()
+                if tempo_no_servidor < 30:
+                    return
+
+            await asyncio.sleep(1)
             async for entry in after.guild.audit_logs(action=discord.AuditLogAction.member_role_update, limit=1):
                 staff = entry.user
-                if staff.bot or staff.id in WHITELIST_USERS: return
+                
+              
+                if staff.bot or staff.id in WHITELIST_USERS or staff.id == after.id: 
+                    return
+                
                 if self.verificar_limite(staff, self.monitor_cargos, limite=3, tempo=60):
                     try:
                         if staff.top_role < after.guild.me.top_role:
                             await staff.edit(roles=[], reason="Anti-Raid: Mass Role Update")
                             await self.enviar_log(after.guild, staff, "Remoção de cargos por Spam de Cargos.", discord.Color.red())
-                    except: pass
+                    except: 
+                        pass
 
 async def setup(bot):
     await bot.add_cog(seguranca(bot))
+
 
 
 
