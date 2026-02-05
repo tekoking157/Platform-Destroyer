@@ -3,27 +3,22 @@ from discord.ext import commands
 from discord import ui
 import datetime
 
-# CONFIGURAÇÕES DE IDENTIDADE
 COR_AZUL = discord.Color.from_rgb(86, 3, 173) 
 BANNER_GIF = "https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif"
 
-# IDs ATUALIZADOS
 ID_CANAL_LOGS = 1392511238759780475
-ID_CARGO_POSTAR = 1357569800947237000 # Cargo que pode usar o comando
-IDS_AVALIADORES = [1357569800947236998, 1414283694662750268] # Cargos extras que podem aceitar/recusar
-IDS_DONOS = [1304003843172077659]
+IDS_PODEM_POSTAR = [1304003843172077659, 1291064098741555273]
+IDS_AVALIADORES = [1357569800947236998, 1357569800947237000, 1414283694662750268]
 
-# --- CHECK DE PERMISSÃO PARA POSTAR ---
 def pode_postar():
     async def predicate(ctx):
-        tem_cargo = any(role.id == ID_CARGO_POSTAR for role in ctx.author.roles)
-        if ctx.author.id in IDS_DONOS or tem_cargo:
+        tem_permissao = any(role.id in IDS_PODEM_POSTAR for role in ctx.author.roles)
+        if ctx.author.id in IDS_PODEM_POSTAR or tem_permissao:
             return True
-        await ctx.send("❌ Apenas o Dono ou cargos autorizados podem postar o recrutamento.", ephemeral=True)
+        await ctx.send("❌ Apenas usuários autorizados podem postar o recrutamento.", ephemeral=True)
         return False
     return commands.check(predicate)
 
-# --- VIEW PARA O BOTÃO DE ABRIR O FORMULÁRIO ---
 class BotaoAbrirRecrutamento(ui.View):
     def __init__(self):
         super().__init__(timeout=None) 
@@ -32,43 +27,41 @@ class BotaoAbrirRecrutamento(ui.View):
     async def callback(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(FormularioRecrutamento())
 
-# --- SISTEMA DE AVALIAÇÃO DA STAFF ---
 class BotoesAvaliacao(ui.View):
-    def __init__(self, membro_candidato: discord.Member):
+    def __init__(self, membro_candidato_id: int):
         super().__init__(timeout=None)
-        self.membro_candidato = membro_candidato
+        self.membro_candidato_id = membro_candidato_id
 
     async def verificar_permissao_voto(self, interaction: discord.Interaction):
-        # Pode avaliar: Donos + Cargo de Postar + Cargos de Avaliador extras
-        cargos_permitidos = [ID_CARGO_POSTAR] + IDS_AVALIADORES
-        tem_permissao = any(role.id in cargos_permitidos for role in interaction.user.roles)
-        return interaction.user.id in IDS_DONOS or tem_permissao
+        tem_cargo = any(role.id in IDS_AVALIADORES for role in interaction.user.roles)
+        return interaction.user.id in IDS_PODEM_POSTAR or tem_cargo or interaction.user.id in IDS_AVALIADORES
 
     @ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="✅", custom_id="btn_aprovar")
     async def aprovar(self, interaction: discord.Interaction, button: ui.Button):
         if not await self.verificar_permissao_voto(interaction):
-            return await interaction.response.send_message("❌ Você não tem permissão para avaliar formulários.", ephemeral=True)
+            return await interaction.response.send_message("❌ Você não tem permissão para avaliar.", ephemeral=True)
 
+        await interaction.response.defer()
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
         embed.title = "✅ FORMULÁRIO APROVADO"
         embed.set_footer(text=f"Aprovado por: {interaction.user.name}")
         
         for item in self.children: item.disabled = True
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.edit_original_response(embed=embed, view=self)
         
         try:
+            membro = await interaction.guild.fetch_member(self.membro_candidato_id)
             embed_dm = discord.Embed(
                 title="🎉 Parabéns!",
-                description=f"Olá {self.membro_candidato.mention}, seu formulário para a equipe **Platform Destroyer** foi **APROVADO**.",
+                description=f"Olá {membro.mention}, seu formulário para a equipe **Platform Destroyer** foi **APROVADO**.",
                 color=discord.Color.green()
             )
             embed_dm.set_image(url=BANNER_GIF)
-            await self.membro_candidato.send(embed=embed_dm)
-            msg = "Candidato aprovado e avisado via DM!"
-        except discord.Forbidden:
-            msg = "Candidato aprovado, mas a DM dele está fechada."
-        await interaction.response.send_message(msg, ephemeral=True)
+            await membro.send(embed=embed_dm)
+            await interaction.followup.send(f"Candidato {membro.name} aprovado e avisado!", ephemeral=True)
+        except:
+            await interaction.followup.send("Candidato aprovado, mas a DM está fechada.", ephemeral=True)
 
     @ui.button(label="Recusar", style=discord.ButtonStyle.danger, emoji="❌", custom_id="btn_recusar")
     async def recusar(self, interaction: discord.Interaction, button: ui.Button):
@@ -81,10 +74,8 @@ class BotoesAvaliacao(ui.View):
         embed.set_footer(text=f"Recusado por: {interaction.user.name}")
 
         for item in self.children: item.disabled = True
-        await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("Formulário recusado.", ephemeral=True)
+        await interaction.response.edit_message(embed=embed, view=self)
 
-# --- O FORMULÁRIO (Modal) ---
 class FormularioRecrutamento(ui.Modal, title='Recrutamento Platform Destroyer'):
     nome = ui.TextInput(label='Nome e Idade', placeholder='Ex: Pedro, 18 anos', required=True)
     experiencia = ui.TextInput(label='Experiência e Disponibilidade', style=discord.TextStyle.paragraph, max_length=500, required=True)
@@ -104,12 +95,11 @@ class FormularioRecrutamento(ui.Modal, title='Recrutamento Platform Destroyer'):
         embed_staff.add_field(name="Extras", value=self.extras.value or "Nenhuma", inline=False)
         
         if canal_logs:
-            await canal_logs.send(embed=embed_staff, view=BotoesAvaliacao(interaction.user))
+            await canal_logs.send(embed=embed_staff, view=BotoesAvaliacao(interaction.user.id))
             await interaction.response.send_message(f"✅ {interaction.user.mention}, formulário enviado!", ephemeral=True)
         else:
             await interaction.response.send_message("❌ Erro: Canal de logs não encontrado.", ephemeral=True)
 
-# --- COG DO RECRUTAMENTO ---
 class recrutamento(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -117,6 +107,7 @@ class recrutamento(commands.Cog):
     @commands.command(name="postar_recrutamento")
     @pode_postar()
     async def postar_recrutamento(self, ctx):
+        """Posta a mensagem oficial de recrutamento"""
         embed = discord.Embed(title="🚀 RECRUTAMENTO | PLATFORM DESTROYER", color=COR_AZUL)
         embed.description = (
             "**Deseja fazer parte da nossa staff de moderação?**\n\n"
@@ -134,3 +125,4 @@ class recrutamento(commands.Cog):
 async def setup(bot):
     bot.add_view(BotaoAbrirRecrutamento()) 
     await bot.add_cog(recrutamento(bot))
+
