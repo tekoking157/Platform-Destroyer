@@ -12,15 +12,26 @@ IDS_STAFF_PERMITIDOS = [
     1414283694662750268,
     1357569800947237000
 ]
+IDS_STAFF_LIMITADO = [1463174855904989428] 
 USUARIOS_SUPREMOS = [1304003843172077659, 935566792384991303]
 
 def check_staff():
     async def predicate(ctx):
         if not ctx.guild: return False
-        tem_cargo = any(role.id in IDS_STAFF_PERMITIDOS for role in ctx.author.roles)
+        todos_permitidos = IDS_STAFF_PERMITIDOS + IDS_STAFF_LIMITADO
+        tem_cargo = any(role.id in todos_permitidos for role in ctx.author.roles)
         if ctx.author.id in USUARIOS_SUPREMOS or tem_cargo:
             return True
         await ctx.send("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+        return False
+    return commands.check(predicate)
+
+def check_pode_banir():
+    async def predicate(ctx):
+        if ctx.author.id in USUARIOS_SUPREMOS: return True
+        tem_staff_full = any(role.id in IDS_STAFF_PERMITIDOS for role in ctx.author.roles)
+        if tem_staff_full: return True
+        await ctx.send("❌ Seu cargo não tem permissão para banir ou desbanir usuários.", ephemeral=True)
         return False
     return commands.check(predicate)
 
@@ -66,7 +77,7 @@ class punicoes(commands.Cog):
         self.bot = bot
         self.ID_CANAL_LOGS = 1357569804273324285
         self.ID_CARGO_MUTADO = 1468077325215338719
-        self.COR_PLATFORM = discord.Color.from_rgb(47, 49, 54)
+        self.COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
         self.warns_cache = {}
 
     async def identificar_alvo(self, ctx, membro):
@@ -108,41 +119,71 @@ class punicoes(commands.Cog):
     @commands.hybrid_command(name="modstats", description="Estatísticas detalhadas de um moderador")
     @check_staff()
     async def modstats(self, ctx, moderador: discord.Member = None):
-        """Uso: ?modstats @moderador"""
         moderador = moderador or ctx.author
         await ctx.defer()
         canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
-        if not canal_logs: return await ctx.send("❌ Canal de logs não encontrado.")
-
-        stats = {"WARN": 0, "MUTE": 0, "KICK": 0, "BAN": 0}
+        
+        stats = {"WARN": {"hoje": 0, "semana": 0, "total": 0}, 
+                 "MUTE": {"hoje": 0, "semana": 0, "total": 0}, 
+                 "KICK": {"hoje": 0, "semana": 0, "total": 0}, 
+                 "BAN":  {"hoje": 0, "semana": 0, "total": 0}}
+        
+        total_acumulado = 0
         agora = datetime.datetime.now(datetime.timezone.utc)
-        hoje, semana, total_geral = 0, 0, 0
 
         async for message in canal_logs.history(limit=1000):
             if message.author == self.bot.user and message.embeds:
-                embed_msg = message.embeds[0]
-                if f"{moderador.id}" in str(embed_msg.to_dict()):
-                    titulo = embed_msg.title.upper() if embed_msg.title else ""
-                    for k in stats.keys():
-                        if k in titulo: stats[k] += 1
+                embed = message.embeds[0]
+                content = str(embed.to_dict())
+                if f"{moderador.id}" in content and "| moderador" in content:
+                    titulo = embed.title.upper() if embed.title else ""
                     delta = agora - message.created_at
-                    if delta.days == 0: hoje += 1
-                    if delta.days < 7: semana += 1
-                    total_geral += 1
+                    for tipo in stats.keys():
+                        if tipo in titulo:
+                            stats[tipo]["total"] += 1
+                            if delta.days == 0: stats[tipo]["hoje"] += 1
+                            if delta.days < 7: stats[tipo]["semana"] += 1
+                    total_acumulado += 1
 
         embed = discord.Embed(title=f"📊 Estatísticas | {moderador.name}", color=self.COR_PLATFORM)
+        embed.description = f"Resumo de ações de moderação de {moderador.mention}"
         embed.set_thumbnail(url=moderador.display_avatar.url)
-        cat_txt = "\n".join([f"**{k}:** `{v}`" for k, v in stats.items()])
-        embed.add_field(name="| categorias", value=cat_txt, inline=True)
-        temp_txt = f"**Hoje:** `{hoje}`\n**7 dias:** `{semana}`\n**Total:** `{total_geral}`"
-        embed.add_field(name="| período", value=temp_txt, inline=True)
-        embed.set_footer(text=f"Total de {total_geral} ações registradas.")
+
+        for tipo, valores in stats.items():
+            txt = f"Hoje: **{valores['hoje']}**\nSemana: **{valores['semana']}**\nTotal: **{valores['total']}**"
+            embed.add_field(name=tipo, value=txt, inline=True)
+
+        embed.add_field(name="📈 TOTAL ACUMULADO", value=f"O moderador possui **{total_acumulado}** punições registradas ao todo.", inline=False)
+        embed.set_footer(text="Pesquisa realizada nas últimas 1000 mensagens de logs.")
+        await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name="modlogs", description="Verifica o histórico de punições de um usuário")
+    @check_staff()
+    async def modlogs(self, ctx, usuario: discord.User):
+        await ctx.defer()
+        canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
+        historico = []
+
+        async for message in canal_logs.history(limit=1000):
+            if message.author == self.bot.user and message.embeds:
+                embed = message.embeds[0]
+                content = str(embed.to_dict())
+                if f"{usuario.id}" in content and "| usuário" in content:
+                    data = message.created_at.strftime("%d/%m/%Y")
+                    acao = embed.title.replace("| ", "") if embed.title else "Ação Desconhecida"
+                    historico.append(f"`{data}` - **{acao}**")
+
+        if not historico:
+            return await ctx.send(f"✅ Nenhuma punição encontrada para {usuario.mention}.")
+
+        embed = discord.Embed(title=f"📜 Histórico | {usuario.name}", color=self.COR_PLATFORM)
+        embed.description = "\n".join(historico[:15])
+        embed.set_footer(text=f"Total de {len(historico)} registros encontrados.")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="mute", description="Silencia um membro")
     @check_staff()
     async def mute(self, ctx, membro: discord.Member = None, tempo: str = "10min", *, motivo: str = "não informado"):
-        """Uso: ?mute @membro 10min Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         if not await self.checar_hierarquia(ctx, membro): return
@@ -169,7 +210,6 @@ class punicoes(commands.Cog):
     @commands.hybrid_command(name="unmute", description="Remove silenciamento")
     @check_staff()
     async def unmute(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
-        """Uso: ?unmute @membro Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         try:
@@ -177,14 +217,13 @@ class punicoes(commands.Cog):
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
             if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
             await self.enviar_log(ctx, membro, "unmute", motivo, discord.Color.green())
-            await ctx.send(f"✅ {membro.mention} desmutado.")
+            await ctx.send(f"✅ {membro.mention} desmutado.\n**Motivo:** {motivo}")
         except:
             await ctx.send("❌ Erro ao desmutar.")
 
     @commands.hybrid_command(name="warn", description="Aplica um aviso")
     @check_staff()
     async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
-        """Uso: ?warn @membro Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
@@ -201,49 +240,47 @@ class punicoes(commands.Cog):
     @commands.hybrid_command(name="kick", description="Expulsa um membro")
     @check_staff()
     async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        """Uso: ?kick @membro Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
         await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
         await membro.kick(reason=motivo)
-        await ctx.send(f"✅ {membro.mention} expulso.")
+        await ctx.send(f"✅ {membro.mention} expulso.\n**Motivo:** {motivo}")
 
     @commands.hybrid_command(name="ban", description="Bane um membro")
     @check_staff()
+    @check_pode_banir()
     async def ban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        """Uso: ?ban @membro Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
-        await ctx.send(f"✅ {membro.mention} banido.")
+        await ctx.send(f"✅ {membro.mention} banido.\n**Motivo:** {motivo}")
 
     @commands.hybrid_command(name="ipban", description="Bane IP e limpa mensagens")
     @check_staff()
+    @check_pode_banir()
     async def ipban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        """Uso: ?ipban @membro Motivo"""
         membro = await self.identificar_alvo(ctx, membro)
         if not membro: return
         if not await self.checar_hierarquia(ctx, membro): return
         await self.enviar_log(ctx, membro, "IP BAN (7D)", motivo, discord.Color.dark_red())
         await membro.ban(reason=f"IP BAN: {motivo}", delete_message_days=7)
-        await ctx.send(f"🚫 {membro.mention} banido por IP (7 dias de limpeza).")
+        await ctx.send(f"🚫 {membro.mention} banido por IP (7 dias de limpeza).\n**Motivo:** {motivo}")
 
     @commands.hybrid_command(name="unban", description="Desbane pelo ID")
     @check_staff()
+    @check_pode_banir()
     async def unban(self, ctx, user_id: str, *, motivo="não informado"):
-        """Uso: ?unban ID_DO_USUARIO Motivo"""
         user = await self.bot.fetch_user(int(user_id))
         await ctx.guild.unban(user)
         await self.enviar_log(ctx, user, "unban", motivo, discord.Color.green())
-        await ctx.send(f"✅ `{user.name}` desbanido.")
+        await ctx.send(f"✅ `{user.name}` desbanido.\n**Motivo:** {motivo}")
 
     @commands.hybrid_command(name="clear", description="Limpa o chat")
     @check_staff()
     async def clear(self, ctx, quantidade: int):
-        """Uso: ?clear 10"""
         if quantidade <= 0: return await ctx.send("❌ Use números positivos.")
         if ctx.interaction: await ctx.defer(ephemeral=True)
         deleted = await ctx.channel.purge(limit=quantidade if ctx.interaction else quantidade + 1)
