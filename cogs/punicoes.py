@@ -122,6 +122,7 @@ class punicoes(commands.Cog):
         if not canal: return
         
         embed = discord.Embed(title=f"| {acao.upper()}", color=cor, timestamp=datetime.datetime.now())
+        embed.set_thumbnail(url=membro.display_avatar.url)
         embed.add_field(name="| usuário", value=f"{membro.mention}\n`{membro.id}`", inline=False)
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
         if "muta" in acao.lower(): embed.add_field(name="| duração", value=duracao, inline=False)
@@ -337,6 +338,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
