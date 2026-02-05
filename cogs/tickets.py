@@ -5,13 +5,11 @@ import datetime
 import io
 import aiohttp
 
-# CONFIGURAÇÕES (IDs Atualizados)
 COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
 BANNER_URL = "https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif"
 ID_CATEGORIA_TICKETS = 1357569803778392269
-ID_CANAL_LOG_TICKETS = 1392528999623692460 # ID atualizado para seu canal de logs
+ID_CANAL_LOG_TICKETS = 1392528999623692460 
 
-# PERMISSÕES ESPECÍFICAS (IDs Atualizados)
 ID_DONO_BOT = 1304003843172077659
 ID_CARGO_SETUP = 1357569800947237000
 ID_CARGO_REIVINDICAR = 1357569800938721349
@@ -54,7 +52,6 @@ class TicketView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
-        # Dar permissão de ver o canal para quem pode reivindicar e para a alta staff
         cargo_suporte = guild.get_role(ID_CARGO_REIVINDICAR)
         if cargo_suporte:
             overwrites[cargo_suporte] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
@@ -68,7 +65,7 @@ class TicketView(discord.ui.View):
             name=nome_canal, 
             category=categoria, 
             overwrites=overwrites,
-            topic=f"Dono do Ticket: {interaction.user.id}"
+            topic=f"Dono: {interaction.user.id} | Tipo: {tipo}"
         )
         
         await registrar_ticket_site({
@@ -81,31 +78,28 @@ class TicketView(discord.ui.View):
         embed.description = f"Olá {interaction.user.mention}, descreva seu problema abaixo e aguarde um moderador."
         embed.set_image(url=BANNER_URL)
         
-        view = ReivindicarView(usuario_id=interaction.user.id, tipo=tipo)
-        await canal.send(embed=embed, view=view)
+        await canal.send(embed=embed, view=ReivindicarView(interaction.user.id))
         await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
 
 class ReivindicarView(discord.ui.View):
-    def __init__(self, usuario_id, tipo):
+    def __init__(self, usuario_id=None):
         super().__init__(timeout=None)
         self.usuario_id = usuario_id
-        self.tipo = tipo
 
-    @discord.ui.button(label="Reivindicar", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_claim")
+    @discord.ui.button(label="Reivindicar", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_claim_perma")
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Apenas o cargo 1357569800938721349 ou Alta Staff pode reivindicar
         pode_reivindicar = interaction.user.id == ID_DONO_BOT or \
                            any(role.id == ID_CARGO_REIVINDICAR for role in interaction.user.roles) or \
                            any(role.id in IDS_ALTA_STAFF for role in interaction.user.roles)
 
         if not pode_reivindicar:
-            return await interaction.response.send_message("❌ Você não tem permissão para reivindicar este ticket.", ephemeral=True)
+            return await interaction.response.send_message("❌ Você não tem permissão para reivindicar.", ephemeral=True)
 
         await interaction.response.defer()
         
         dono_id = self.usuario_id
         if not dono_id and interaction.channel.topic:
-            try: dono_id = int(interaction.channel.topic.split(": ")[1])
+            try: dono_id = int(interaction.channel.topic.split("|")[0].split(": ")[1])
             except: dono_id = 0
 
         await registrar_ticket_site({
@@ -113,28 +107,26 @@ class ReivindicarView(discord.ui.View):
             "assigned_to": str(interaction.user.id), "assigned_username": interaction.user.name
         })
 
-        view = FecharTicketView(staff_id=interaction.user.id, dono_ticket_id=dono_id)
+        view = FecharTicketView(interaction.user.id)
         await interaction.message.delete()
         await interaction.channel.send(f"🛡️ Atendimento iniciado por {interaction.user.mention}", view=view)
 
 class FecharTicketView(discord.ui.View):
-    def __init__(self, staff_id, dono_ticket_id):
+    def __init__(self, staff_id=None):
         super().__init__(timeout=None)
         self.staff_id = staff_id
-        self.dono_ticket_id = dono_ticket_id
 
-    @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close")
+    @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
     async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Pode fechar se: For quem reivindicou OU for da Alta Staff OU for o dono do bot
         es_alta_staff = any(role.id in IDS_ALTA_STAFF for role in interaction.user.roles)
         pode_fechar = interaction.user.id == self.staff_id or \
                       interaction.user.id == ID_DONO_BOT or \
                       es_alta_staff
 
         if not pode_fechar:
-            return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket (apenas o responsável ou Alta Staff).", ephemeral=True)
+            return await interaction.response.send_message("❌ Apenas o responsável ou Alta Staff podem fechar.", ephemeral=True)
 
-        await interaction.response.send_message("Salvando logs e fechando em 5 segundos...")
+        await interaction.response.send_message("💾 Salvando logs e fechando em 5 segundos...")
         
         await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
         await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
@@ -142,11 +134,14 @@ class FecharTicketView(discord.ui.View):
         log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
         mensagens = []
         async for msg in interaction.channel.history(limit=None, oldest_first=True):
-            mensagens.append(f"[{msg.created_at.strftime('%H:%M')}] {msg.author}: {msg.content}")
+            mensagens.append(f"[{msg.created_at.strftime('%d/%m %H:%M')}] {msg.author}: {msg.content}")
         
         buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
         if log_canal:
-            await log_canal.send(f"📝 Log de ticket: `{interaction.channel.name}`", file=discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt"))
+            await log_canal.send(
+                f"📝 **Log de Ticket**\nCanal: `{interaction.channel.name}`\nFechado por: {interaction.user.mention}", 
+                file=discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
+            )
 
         await asyncio.sleep(5)
         await interaction.channel.delete()
@@ -157,10 +152,9 @@ class ticket(commands.Cog):
 
     @commands.hybrid_command(name="setup_ticket", description="Envia o painel de tickets")
     async def setup_ticket(self, ctx):
-        # Apenas Dono ou Cargo de Setup
         tem_permissao = ctx.author.id == ID_DONO_BOT or any(role.id == ID_CARGO_SETUP for role in ctx.author.roles)
         if not tem_permissao:
-            return await ctx.send("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+            return await ctx.send("❌ Você não tem permissão.", ephemeral=True)
 
         embed = discord.Embed(
             title="Platform Destroyer | Tickets",
@@ -179,5 +173,8 @@ class ticket(commands.Cog):
         await ctx.send(embed=embed, view=TicketView())
 
 async def setup(bot):
-    bot.add_view(TicketView()) 
+    bot.add_view(TicketView())
+    bot.add_view(ReivindicarView())
+    bot.add_view(FecharTicketView())
     await bot.add_cog(ticket(bot))
+
