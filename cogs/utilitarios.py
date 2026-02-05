@@ -4,10 +4,8 @@ from discord.ext import commands
 import datetime
 import time
 
-# ID do Dono
 ID_DONO = 1304003843172077659
 
-# --- MODAL PARA O COMANDO EMBED ---
 class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
     titulo = ui.TextInput(label="Título", placeholder="Título do aviso...", required=True)
     descricao = ui.TextInput(label="Descrição", style=discord.TextStyle.paragraph, placeholder="Conteúdo principal...", required=True)
@@ -15,7 +13,6 @@ class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
     imagem = ui.TextInput(label="URL da Imagem (Opcional)", placeholder="https://...", required=False)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Proteção no submit do Modal
         if interaction.user.id != ID_DONO:
             return await interaction.response.send_message("❌ Acesso negado.", ephemeral=True)
 
@@ -39,7 +36,6 @@ class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
         await interaction.response.send_message("✅ Embed enviado com sucesso!", ephemeral=True)
         await interaction.channel.send(embed=embed)
 
-# --- VIEW PARA O COMANDO HELP ---
 class HelpSelect(ui.Select):
     def __init__(self, bot, esconder):
         options = [
@@ -74,7 +70,6 @@ class HelpView(ui.View):
         super().__init__(timeout=60)
         self.add_item(HelpSelect(bot, esconder))
 
-# --- CLASSE PRINCIPAL ---
 class utilitarios(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -82,7 +77,6 @@ class utilitarios(commands.Cog):
         self.start_time = time.time()
         self.afk_users = {} 
 
-    # --- SISTEMA DE AFK (EVENTO) ---
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -145,7 +139,7 @@ class utilitarios(commands.Cog):
         embed = discord.Embed(title=f"🏰 Informações de {g.name}", color=self.COR_PLATFORM)
         if g.icon: embed.set_thumbnail(url=g.icon.url)
         
-        embed.add_field(name="👑 Dono", value=g.owner.mention, inline=True)
+        embed.add_field(name="👑 Dono", value=f"{g.owner.mention if g.owner else 'Não disponível'}", inline=True)
         embed.add_field(name="🆔 ID", value=f"`{g.id}`", inline=True)
         embed.add_field(name="📅 Criado em", value=f"<t:{int(g.created_at.timestamp())}:D>", inline=True)
         embed.add_field(name="👥 Membros", value=f"Total: `{total}`\nHumanos: `{human_count}`\nBots: `{bot_count}`", inline=True)
@@ -231,6 +225,17 @@ class utilitarios(commands.Cog):
         embed.set_image(url=membro.display_avatar.url)
         await ctx.send(embed=embed)
 
+    @commands.hybrid_command(name="banner", description="mostra o banner de um usuário")
+    async def banner(self, ctx, membro: discord.Member = None):
+        membro = membro or ctx.author
+        user = await self.bot.fetch_user(membro.id)
+        if not user.banner:
+            return await ctx.send("❌ Este usuário não possui um banner.", ephemeral=True)
+        
+        embed = discord.Embed(title=f"🚩 Banner de {membro.name}", color=self.COR_PLATFORM)
+        embed.set_image(url=user.banner.url)
+        await ctx.send(embed=embed)
+
     @commands.hybrid_command(name="lock", description="tranca o canal atual")
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
@@ -262,6 +267,7 @@ class utilitarios(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
