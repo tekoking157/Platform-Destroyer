@@ -72,6 +72,24 @@ class PunicaoView(ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Erro ao remover: {e}", ephemeral=True)
 
+class ModlogsPagination(ui.View):
+    def __init__(self, pages, current_page=0):
+        super().__init__(timeout=60)
+        self.pages = pages
+        self.current_page = current_page
+
+    @ui.button(emoji="<:back:1336829707269701763>", style=discord.ButtonStyle.gray)
+    async def previous(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+    @ui.button(emoji="<:next:1336829709232771143>", style=discord.ButtonStyle.gray)
+    async def next(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page < len(self.pages) - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
 class punicoes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -146,14 +164,14 @@ class punicoes(commands.Cog):
                     total_acumulado += 1
 
         embed = discord.Embed(title=f"📊 Estatísticas | {moderador.name}", color=self.COR_PLATFORM)
-        embed.description = f"Resumo de ações de moderação de {moderador.mention}"
+        embed.description = f"punições de {moderador.mention}"
         embed.set_thumbnail(url=moderador.display_avatar.url)
 
         for tipo, valores in stats.items():
             txt = f"Hoje: **{valores['hoje']}**\nSemana: **{valores['semana']}**\nTotal: **{valores['total']}**"
             embed.add_field(name=tipo, value=txt, inline=True)
 
-        embed.add_field(name="📈 TOTAL ACUMULADO", value=f"O moderador possui **{total_acumulado}** punições registradas ao todo.", inline=False)
+        embed.add_field(name="📈 TOTAL ACUMULADO", value=f"O moderador possui **{total_acumulado}** punições.", inline=False)
         embed.set_footer(text="Pesquisa realizada nas últimas 1000 mensagens de logs.")
         await ctx.send(embed=embed)
 
@@ -162,24 +180,44 @@ class punicoes(commands.Cog):
     async def modlogs(self, ctx, usuario: discord.User):
         await ctx.defer()
         canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
-        historico = []
+        punicoes_encontradas = []
 
         async for message in canal_logs.history(limit=1000):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
                 content = str(embed.to_dict())
                 if f"{usuario.id}" in content and "| usuário" in content:
-                    data = message.created_at.strftime("%d/%m/%Y")
-                    acao = embed.title.replace("| ", "") if embed.title else "Ação Desconhecida"
-                    historico.append(f"`{data}` - **{acao}**")
+                    info = {
+                        "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Ação Desconhecida",
+                        "moderador": "Desconhecido",
+                        "motivo": "Motivo não informado",
+                        "data": message.created_at
+                    }
+                    for field in embed.fields:
+                        if "| moderador" in field.name.lower(): info["moderador"] = field.value.split("\n")[0]
+                        if "| motivo" in field.name.lower(): info["motivo"] = field.value
+                    punicoes_encontradas.append(info)
 
-        if not historico:
+        if not punicoes_encontradas:
             return await ctx.send(f"✅ Nenhuma punição encontrada para {usuario.mention}.")
 
-        embed = discord.Embed(title=f"📜 Histórico | {usuario.name}", color=self.COR_PLATFORM)
-        embed.description = "\n".join(historico[:15])
-        embed.set_footer(text=f"Total de {len(historico)} registros encontrados.")
-        await ctx.send(embed=embed)
+        paginas = []
+        punicoes_por_pagina = 2
+        for i in range(0, len(punicoes_encontradas), punicoes_por_pagina):
+            chunk = punicoes_encontradas[i:i + punicoes_por_pagina]
+            embed = discord.Embed(title=f"Histórico de Punições de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
+            embed.set_thumbnail(url=usuario.display_avatar.url)
+            
+            for p in chunk:
+                timestamp = int(p["data"].timestamp())
+                txt = f"**Tipo:** {p['tipo']}\n**Punido por:** {p['moderador']}\n**Punido em:** <t:{timestamp}:d> às <t:{timestamp}:t> (há <t:{timestamp}:R>)\n**Motivo:** {p['motivo']}"
+                embed.add_field(name="\u200b", value=txt, inline=False)
+            
+            embed.set_footer(text=f"Total de punições: {len(punicoes_encontradas)}")
+            paginas.append(embed)
+
+        view = ModlogsPagination(paginas) if len(paginas) > 1 else None
+        await ctx.send(embed=paginas[0], view=view)
 
     @commands.hybrid_command(name="mute", description="Silencia um membro")
     @check_staff()
@@ -237,6 +275,15 @@ class punicoes(commands.Cog):
         else:
             await ctx.send(f"✅ {membro.mention} avisado ({atual}/3).\n**Motivo:** {motivo}")
 
+    @commands.hybrid_command(name="unwarn", description="Remove os avisos de um membro")
+    @check_staff()
+    async def unwarn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        self.warns_cache[membro.id] = 0
+        await self.enviar_log(ctx, membro, "unwarn", motivo, discord.Color.green())
+        await ctx.send(f"✅ Avisos de {membro.mention} foram resetados.\n**Motivo:** {motivo}")
+
     @commands.hybrid_command(name="kick", description="Expulsa um membro")
     @check_staff()
     async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
@@ -290,6 +337,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
