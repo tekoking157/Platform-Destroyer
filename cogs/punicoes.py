@@ -14,6 +14,7 @@ IDS_STAFF_PERMITIDOS = [
 ]
 IDS_STAFF_LIMITADO = [1463174855904989428] 
 USUARIOS_SUPREMOS = [1304003843172077659, 935566792384991303]
+DONOS_NUCLEAR = [1304003843172077659, 1291064098741555273]
 
 def check_staff():
     async def predicate(ctx):
@@ -55,12 +56,12 @@ class PunicaoView(ui.View):
             if "ban" in self.acao:
                 await guild.unban(membro)
                 msg = f"✅ Banimento de {membro.name} removido."
-            elif "mute" in self.acao:
+            elif "mute" in self.acao or "nuclear" in self.acao:
                 if isinstance(membro, discord.Member):
                     await membro.timeout(None)
                     cargo = guild.get_role(self.cog.ID_CARGO_MUTADO)
                     if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
-                msg = f"✅ Mute de {membro.mention} removido."
+                msg = f"✅ Punição de {membro.mention} removida."
             elif "warn" in self.acao:
                 self.cog.warns_cache[self.membro_id] = 0
                 msg = f"✅ Avisos de {membro.mention} resetados."
@@ -135,7 +136,7 @@ class punicoes(commands.Cog):
         embed.set_thumbnail(url=membro.display_avatar.url)
         embed.add_field(name="| usuário", value=f"{membro.mention}\n`{membro.id}`", inline=False)
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
-        if "muta" in acao.lower(): embed.add_field(name="| duração", value=duracao, inline=False)
+        if "muta" in acao.lower() or "nuclear" in acao.lower(): embed.add_field(name="| duração", value=duracao, inline=False)
         embed.add_field(name="| motivo", value=motivo, inline=False)
         embed.set_footer(text=f"ID do Alvo: {membro.id}")
         
@@ -144,6 +145,28 @@ class punicoes(commands.Cog):
             view_enviar = PunicaoView(self, membro.id, acao)
             
         await canal.send(embed=embed, view=view_enviar)
+
+    @commands.hybrid_command(name="nuclearbomb", description="Expurga um membro do servidor")
+    async def nuclearbomb(self, ctx, membro: discord.Member = None):
+        if ctx.author.id not in DONOS_NUCLEAR:
+            return await ctx.send("❌ Você não tem autoridade para usar a Bomba Nuclear.", ephemeral=True)
+            
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("❓ Quem você deseja expurgar?")
+        if not await self.checar_hierarquia(ctx, membro): return
+        
+        motivo = "Expurgado via Nuclear Bomb"
+        
+        try:
+            await membro.edit(roles=[])
+            await membro.timeout(datetime.timedelta(minutes=15), reason=motivo)
+            
+            await self.avisar_usuario(membro, "NUCLEAR BOMB", motivo, ctx.guild.name)
+            await self.enviar_log(ctx, membro, "NUCLEAR BOMB", motivo, discord.Color.dark_red(), "15 minutos")
+            
+            await ctx.send(f"{membro.mention} foi expurgado.")
+        except Exception as e:
+            await ctx.send(f"❌ Falha na sequência: {e}")
 
     @commands.hybrid_command(name="modstats", description="Estatísticas detalhadas de um moderador")
     @check_staff()
@@ -195,35 +218,34 @@ class punicoes(commands.Cog):
         async for message in canal_logs.history(limit=1000):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
-                # Busca o ID no rodapé ou nos campos para maior precisão
                 content = str(embed.to_dict())
-                if f"{usuario.id}" in content:
+                if str(usuario.id) in content:
                     info = {
-                        "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Ação",
+                        "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Punição",
                         "moderador": "Desconhecido",
                         "motivo": "Não informado",
                         "data": message.created_at
                     }
                     for field in embed.fields:
-                        if "moderador" in field.name.lower(): info["moderador"] = field.value.split("\n")[0]
-                        if "motivo" in field.name.lower(): info["motivo"] = field.value
+                        fn = field.name.lower()
+                        if "moderador" in fn: info["moderador"] = field.value.split("\n")[0]
+                        if "motivo" in fn: info["motivo"] = field.value
                     punicoes_encontradas.append(info)
 
         if not punicoes_encontradas:
             return await ctx.send(f"✅ Nenhuma punição encontrada para {usuario.mention}.")
 
         paginas = []
-        punicoes_por_pagina = 2
-        for i in range(0, len(punicoes_encontradas), punicoes_por_pagina):
-            chunk = punicoes_encontradas[i:i + punicoes_por_pagina]
-            embed = discord.Embed(title=f"Histórico de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
-            embed.set_thumbnail(url=usuario.display_avatar.url)
+        for i in range(0, len(punicoes_encontradas), 2):
+            chunk = punicoes_encontradas[i:i + 2]
+            emb = discord.Embed(title=f"Histórico de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
+            emb.set_thumbnail(url=usuario.display_avatar.url)
             for p in chunk:
                 ts = int(p["data"].timestamp())
                 txt = f"**Tipo:** {p['tipo']}\n**Moderador:** {p['moderador']}\n**Data:** <t:{ts}:d> (<t:{ts}:R>)\n**Motivo:** {p['motivo']}"
-                embed.add_field(name="\u200b", value=txt, inline=False)
-            embed.set_footer(text=f"Total: {len(punicoes_encontradas)} punições")
-            paginas.append(embed)
+                emb.add_field(name="\u200b", value=txt, inline=False)
+            emb.set_footer(text=f"Total: {len(punicoes_encontradas)} punições")
+            paginas.append(emb)
 
         view = ModlogsPagination(paginas) if len(paginas) > 1 else None
         await ctx.send(embed=paginas[0], view=view)
@@ -246,14 +268,14 @@ class punicoes(commands.Cog):
                 await ctx.send(f"✅ {membro.mention} mutado **permanente**.\n**Motivo:** {motivo}")
             else:
                 match = re.fullmatch(r"(\d+)(min|h|d)", tempo.lower())
-                if not match: return await ctx.send("❌ Tempo inválido (Ex: 10min, 1h, 0).")
-                qtd, uni = int(match.group(1)), match.group(2)
-                seg = qtd * {'d': 86400, 'h': 3600, 'min': 60}[uni]
-                await membro.timeout(datetime.timedelta(seconds=seg), reason=motivo)
-                await self.enviar_log(ctx, membro, "mute", motivo, discord.Color.red(), tempo)
-                await ctx.send(f"✅ {membro.mention} silenciado por **{tempo}**.\n**Motivo:** {motivo}")
+                if match:
+                    qtd, uni = int(match.group(1)), match.group(2)
+                    seg = qtd * {'d': 86400, 'h': 3600, 'min': 60}[uni]
+                    await membro.timeout(datetime.timedelta(seconds=seg), reason=motivo)
+                    await self.enviar_log(ctx, membro, "mute", motivo, discord.Color.red(), tempo)
+                    await ctx.send(f"✅ {membro.mention} silenciado por **{tempo}**.\n**Motivo:** {motivo}")
         except:
-            await ctx.send("❌ Erro de permissão: Verifique meu cargo.")
+            await ctx.send("❌ Erro de permissão.")
 
     @commands.hybrid_command(name="unmute", description="Remove silenciamento")
     @check_staff()
@@ -265,7 +287,7 @@ class punicoes(commands.Cog):
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
             if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
             await self.enviar_log(ctx, membro, "unmute", motivo, discord.Color.green())
-            await ctx.send(f"✅ {membro.mention} desmutado.\n**Motivo:** {motivo}")
+            await ctx.send(f"✅ {membro.mention} desmutado.")
         except:
             await ctx.send("❌ Erro ao desmutar.")
 
@@ -282,18 +304,18 @@ class punicoes(commands.Cog):
         if atual >= 3:
             self.warns_cache[membro.id] = 0
             await membro.timeout(datetime.timedelta(hours=1))
-            await ctx.send(f"🚨 {membro.mention} mutado por 1h (3 avisos).\n**Motivo:** {motivo}")
+            await ctx.send(f"🚨 {membro.mention} mutado por 1h (3 avisos).")
         else:
-            await ctx.send(f"✅ {membro.mention} avisado ({atual}/3).\n**Motivo:** {motivo}")
+            await ctx.send(f"✅ {membro.mention} avisado ({atual}/3).")
 
     @commands.hybrid_command(name="unwarn", description="Remove os avisos de um membro")
     @check_staff()
     async def unwarn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return
         self.warns_cache[membro.id] = 0
         await self.enviar_log(ctx, membro, "unwarn", motivo, discord.Color.green())
-        await ctx.send(f"✅ Avisos de {membro.mention} foram resetados.\n**Motivo:** {motivo}")
+        await ctx.send(f"✅ Avisos de {membro.mention} resetados.")
 
     @commands.hybrid_command(name="kick", description="Expulsa um membro")
     @check_staff()
@@ -304,7 +326,7 @@ class punicoes(commands.Cog):
         await self.avisar_usuario(membro, "kick", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
         await membro.kick(reason=motivo)
-        await ctx.send(f"✅ {membro.mention} expulso.\n**Motivo:** {motivo}")
+        await ctx.send(f"✅ {membro.mention} expulso.")
 
     @commands.hybrid_command(name="ban", description="Bane um membro")
     @check_staff()
@@ -316,7 +338,7 @@ class punicoes(commands.Cog):
         await self.avisar_usuario(membro, "ban", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
-        await ctx.send(f"✅ {membro.mention} banido.\n**Motivo:** {motivo}")
+        await ctx.send(f"✅ {membro.mention} banido.")
 
     @commands.hybrid_command(name="ipban", description="Bane IP e limpa mensagens")
     @check_staff()
@@ -328,7 +350,7 @@ class punicoes(commands.Cog):
         await self.avisar_usuario(membro, "IP BAN", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "IP BAN (7D)", motivo, discord.Color.dark_red())
         await membro.ban(reason=f"IP BAN: {motivo}", delete_message_days=7)
-        await ctx.send(f"🚫 {membro.mention} banido por IP (7 dias de limpeza).\n**Motivo:** {motivo}")
+        await ctx.send(f"🚫 {membro.mention} banido por IP.")
 
     @commands.hybrid_command(name="unban", description="Desbane pelo ID")
     @check_staff()
@@ -337,7 +359,7 @@ class punicoes(commands.Cog):
         user = await self.bot.fetch_user(int(user_id))
         await ctx.guild.unban(user)
         await self.enviar_log(ctx, user, "unban", motivo, discord.Color.green())
-        await ctx.send(f"✅ `{user.name}` desbanido.\n**Motivo:** {motivo}")
+        await ctx.send(f"✅ `{user.name}` desbanido.")
 
     @commands.hybrid_command(name="clear", description="Limpa o chat")
     @check_staff()
@@ -351,7 +373,6 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
-
 
 
 
