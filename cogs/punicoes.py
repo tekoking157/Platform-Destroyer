@@ -10,7 +10,7 @@ IDS_STAFF_PERMITIDOS = [
     1431475496377389177,
     1414283452878028800,
     1414283694662750268,
-    1357569800947236998 # ID corrigido aqui (final 998)
+    1357569800947236998
 ]
 IDS_STAFF_LIMITADO = [1463174855904989428] 
 USUARIOS_SUPREMOS = [1304003843172077659, 935566792384991303]
@@ -163,8 +163,7 @@ class punicoes(commands.Cog):
         async for message in canal_logs.history(limit=1000):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
-                content = str(embed.to_dict())
-                if f"{moderador.id}" in content and "| moderador" in content:
+                if f"{moderador.id}" in str(embed.to_dict()):
                     titulo = embed.title.upper() if embed.title else ""
                     delta = agora - message.created_at
                     for tipo in stats.keys():
@@ -172,7 +171,7 @@ class punicoes(commands.Cog):
                             stats[tipo]["total"] += 1
                             if delta.days == 0: stats[tipo]["hoje"] += 1
                             if delta.days < 7: stats[tipo]["semana"] += 1
-                    total_acumulado += 1
+                            total_acumulado += 1
 
         embed = discord.Embed(title=f"📊 Estatísticas | {moderador.name}", color=self.COR_PLATFORM)
         embed.description = f"punições de {moderador.mention}"
@@ -196,17 +195,18 @@ class punicoes(commands.Cog):
         async for message in canal_logs.history(limit=1000):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
+                # Busca o ID no rodapé ou nos campos para maior precisão
                 content = str(embed.to_dict())
-                if f"{usuario.id}" in content and "| usuário" in content:
+                if f"{usuario.id}" in content:
                     info = {
-                        "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Ação Desconhecida",
+                        "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Ação",
                         "moderador": "Desconhecido",
-                        "motivo": "Motivo não informado",
+                        "motivo": "Não informado",
                         "data": message.created_at
                     }
                     for field in embed.fields:
-                        if "| moderador" in field.name.lower(): info["moderador"] = field.value.split("\n")[0]
-                        if "| motivo" in field.name.lower(): info["motivo"] = field.value
+                        if "moderador" in field.name.lower(): info["moderador"] = field.value.split("\n")[0]
+                        if "motivo" in field.name.lower(): info["motivo"] = field.value
                     punicoes_encontradas.append(info)
 
         if not punicoes_encontradas:
@@ -216,15 +216,13 @@ class punicoes(commands.Cog):
         punicoes_por_pagina = 2
         for i in range(0, len(punicoes_encontradas), punicoes_por_pagina):
             chunk = punicoes_encontradas[i:i + punicoes_por_pagina]
-            embed = discord.Embed(title=f"Histórico de Punições de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
+            embed = discord.Embed(title=f"Histórico de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
             embed.set_thumbnail(url=usuario.display_avatar.url)
-            
             for p in chunk:
-                timestamp = int(p["data"].timestamp())
-                txt = f"**Tipo:** {p['tipo']}\n**Punido por:** {p['moderador']}\n**Punido em:** <t:{timestamp}:d> às <t:{timestamp}:t> (há <t:{timestamp}:R>)\n**Motivo:** {p['motivo']}"
+                ts = int(p["data"].timestamp())
+                txt = f"**Tipo:** {p['tipo']}\n**Moderador:** {p['moderador']}\n**Data:** <t:{ts}:d> (<t:{ts}:R>)\n**Motivo:** {p['motivo']}"
                 embed.add_field(name="\u200b", value=txt, inline=False)
-            
-            embed.set_footer(text=f"Total de punições: {len(punicoes_encontradas)}")
+            embed.set_footer(text=f"Total: {len(punicoes_encontradas)} punições")
             paginas.append(embed)
 
         view = ModlogsPagination(paginas) if len(paginas) > 1 else None
