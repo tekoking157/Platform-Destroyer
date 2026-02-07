@@ -84,12 +84,16 @@ class ModlogsPagination(ui.View):
         if self.current_page > 0:
             self.current_page -= 1
             await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+        else:
+            await interaction.response.defer()
 
     @ui.button(emoji="<:next:1336829709232771143>", style=discord.ButtonStyle.gray)
     async def next(self, interaction: discord.Interaction, button: ui.Button):
         if self.current_page < len(self.pages) - 1:
             self.current_page += 1
             await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+        else:
+            await interaction.response.defer()
 
 class punicoes(commands.Cog):
     def __init__(self, bot):
@@ -183,7 +187,7 @@ class punicoes(commands.Cog):
         total_acumulado = 0
         agora = datetime.datetime.now(datetime.timezone.utc)
 
-        async for message in canal_logs.history(limit=1000):
+        async for message in canal_logs.history(limit=500):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
                 if f"{moderador.id}" in str(embed.to_dict()):
@@ -205,7 +209,7 @@ class punicoes(commands.Cog):
             embed.add_field(name=tipo, value=txt, inline=True)
 
         embed.add_field(name="📈 TOTAL ACUMULADO", value=f"O moderador possui **{total_acumulado}** punições.", inline=False)
-        embed.set_footer(text="Pesquisa realizada nas últimas 1000 mensagens de logs.")
+        embed.set_footer(text="Pesquisa realizada nos logs recentes.")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="modlogs", description="Verifica o histórico de punições de um usuário")
@@ -213,13 +217,23 @@ class punicoes(commands.Cog):
     async def modlogs(self, ctx, usuario: discord.User):
         await ctx.defer()
         canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
+        if not canal_logs: return await ctx.send("? Canal de logs não encontrado.")
+        
         punicoes_encontradas = []
+        user_id_str = str(usuario.id)
 
-        async for message in canal_logs.history(limit=1000):
+        async for message in canal_logs.history(limit=400):
             if message.author == self.bot.user and message.embeds:
                 embed = message.embeds[0]
-                content = str(embed.to_dict())
-                if str(usuario.id) in content:
+                encontrou = False
+                if embed.description and user_id_str in embed.description: encontrou = True
+                else:
+                    for field in embed.fields:
+                        if user_id_str in field.value:
+                            encontrou = True
+                            break
+                
+                if encontrou:
                     info = {
                         "tipo": embed.title.replace("| ", "").capitalize() if embed.title else "Punição",
                         "moderador": "Desconhecido",
@@ -233,18 +247,18 @@ class punicoes(commands.Cog):
                     punicoes_encontradas.append(info)
 
         if not punicoes_encontradas:
-            return await ctx.send(f"✅ Nenhuma punição encontrada para {usuario.mention}.")
+            return await ctx.send(f"✅ Nenhuma punição recente para {usuario.mention}.")
 
         paginas = []
         for i in range(0, len(punicoes_encontradas), 2):
             chunk = punicoes_encontradas[i:i + 2]
-            emb = discord.Embed(title=f"Histórico de {usuario.name} — Página {len(paginas)+1}", color=discord.Color.from_rgb(231, 76, 60))
+            emb = discord.Embed(title=f"Histórico de {usuario.name}", color=self.COR_PLATFORM)
             emb.set_thumbnail(url=usuario.display_avatar.url)
             for p in chunk:
                 ts = int(p["data"].timestamp())
-                txt = f"**Tipo:** {p['tipo']}\n**Moderador:** {p['moderador']}\n**Data:** <t:{ts}:d> (<t:{ts}:R>)\n**Motivo:** {p['motivo']}"
-                emb.add_field(name="\u200b", value=txt, inline=False)
-            emb.set_footer(text=f"Total: {len(punicoes_encontradas)} punições")
+                txt = f"**Tipo:** {p['tipo']}\n**Moderador:** {p['moderador']}\n**Data:** <t:{ts}:d>\n**Motivo:** {p['motivo']}"
+                emb.add_field(name="──────────────", value=txt, inline=False)
+            emb.set_footer(text=f"? Página {len(paginas)+1} | Total: {len(punicoes_encontradas)}")
             paginas.append(emb)
 
         view = ModlogsPagination(paginas) if len(paginas) > 1 else None
@@ -373,6 +387,7 @@ class punicoes(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
+
 
 
 
