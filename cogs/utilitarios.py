@@ -47,7 +47,7 @@ class HelpSelect(ui.Select):
             )
             for name, cog in bot.cogs.items() if name not in esconder
         ]
-        super().__init__(placeholder="Escolha uma categoria para ver os comandos...", options=options)
+        super().__init__(placeholder="? Escolha uma categoria para ver os comandos...", options=options)
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
@@ -59,10 +59,11 @@ class HelpSelect(ui.Select):
         
         embed = discord.Embed(
             title=f"📁 Categoria: {self.values[0].capitalize()}",
-            description=" | ".join(cmds) if cmds else "Nenhum comando disponível nesta categoria.",
+            description=f"Aqui estão os comandos disponíveis:\n\n{' | '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
             color=discord.Color.from_rgb(86, 3, 173)
         )
-        embed.set_footer(text=f"Total de {len(cmds)} comandos encontrados.")
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text=f"? Total de {len(cmds)} comandos | Platform Destroyer")
         await interaction.response.edit_message(embed=embed)
 
 class HelpView(ui.View):
@@ -81,27 +82,20 @@ class utilitarios(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-
         if message.author.id in self.afk_users:
             dados = self.afk_users[message.author.id]
             decorrido_total = time.time() - dados['tempo']
-            
             if decorrido_total > 7:
                 self.afk_users.pop(message.author.id)
                 tempo_str = str(datetime.timedelta(seconds=int(decorrido_total)))
-                
-                try:
-                    await message.author.edit(nick=dados['nick_original'])
+                try: await message.author.edit(nick=dados['nick_original'])
                 except: pass
-                
                 await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
-
         for membro in message.mentions:
             if membro.id in self.afk_users:
                 dados = self.afk_users[membro.id]
                 timestamp = int(dados['tempo'])
                 motivo = dados['motivo']
-                
                 embed = discord.Embed(
                     description=f"💤 {membro.mention} está **AFK** no momento.\n\n**Motivo:** {motivo}\n**Desde:** <t:{timestamp}:R>",
                     color=self.COR_PLATFORM
@@ -112,59 +106,40 @@ class utilitarios(commands.Cog):
     async def afk(self, ctx, *, motivo: str = "não informado"):
         nick_original = ctx.author.display_name
         novo_nick = f"[AFK] {nick_original}"[:32]
-
-        self.afk_users[ctx.author.id] = {
-            "motivo": motivo, 
-            "tempo": time.time(),
-            "nick_original": nick_original
-        }
-
-        try:
-            await ctx.author.edit(nick=novo_nick)
+        self.afk_users[ctx.author.id] = {"motivo": motivo, "tempo": time.time(), "nick_original": nick_original}
+        try: await ctx.author.edit(nick=novo_nick)
         except: pass
-
-        embed = discord.Embed(
-            description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**\n\n*Mande uma mensagem após alguns segundos para sair.*",
-            color=self.COR_PLATFORM
-        )
+        embed = discord.Embed(description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**", color=self.COR_PLATFORM)
         await ctx.send(embed=embed, delete_after=10)
 
     @commands.hybrid_command(name="serverinfo", description="mostra informações detalhadas do servidor")
     async def serverinfo(self, ctx):
         g = ctx.guild
-        total = g.member_count
-        bot_count = len([m for m in g.members if m.bot])
-        human_count = total - bot_count
-        
-        embed = discord.Embed(title=f"🏰 Informações de {g.name}", color=self.COR_PLATFORM)
+        embed = discord.Embed(title=f"🏰 {g.name}", color=self.COR_PLATFORM)
+        embed.set_author(name="Informações do Servidor", icon_url=self.bot.user.display_avatar.url)
         if g.icon: embed.set_thumbnail(url=g.icon.url)
-        
-        embed.add_field(name="👑 Dono", value=f"{g.owner.mention if g.owner else 'Não disponível'}", inline=True)
+        if g.banner: embed.set_image(url=g.banner.url)
+        embed.add_field(name="👑 Dono", value=f"{g.owner.mention}", inline=True)
         embed.add_field(name="🆔 ID", value=f"`{g.id}`", inline=True)
-        embed.add_field(name="📅 Criado em", value=f"<t:{int(g.created_at.timestamp())}:D>", inline=True)
-        embed.add_field(name="👥 Membros", value=f"Total: `{total}`\nHumanos: `{human_count}`\nBots: `{bot_count}`", inline=True)
-        embed.add_field(name="✨ Boosts", value=f"Nível: `{g.premium_tier}`\nQuantidade: `{g.premium_subscription_count}`", inline=True)
-        
-        embed.set_footer(text=f"Solicitado por {ctx.author.name}", icon_url=ctx.author.display_avatar.url)
+        embed.add_field(name="📅 Criado", value=f"<t:{int(g.created_at.timestamp())}:R>", inline=True)
+        embed.add_field(name="👥 Membros", value=f"Total: `{g.member_count}`\nBots: `{len([m for m in g.members if m.bot])}`", inline=True)
+        embed.add_field(name="✨ Boosts", value=f"Nível: `{g.premium_tier}`\nQtd: `{g.premium_subscription_count}`", inline=True)
+        embed.add_field(name="💬 Canais", value=f"Texto: `{len(g.text_channels)}`\nVoz: `{len(g.voice_channels)}`", inline=True)
+        embed.set_footer(text=f"? Solicitado por {ctx.author.name}")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="botinfo", description="mostra informações técnicas sobre o bot")
     async def botinfo(self, ctx):
-        uptime_sec = int(round(time.time() - self.start_time))
-        uptime = str(datetime.timedelta(seconds=uptime_sec))
-        
-        embed = discord.Embed(
-            title="Status da Platform Destroyer",
-            description="Bot multifuncional focado em segurança e automação.",
-            color=self.COR_PLATFORM
-        )
+        uptime = str(datetime.timedelta(seconds=int(round(time.time() - self.start_time))))
+        embed = discord.Embed(title="🚀 Platform Destroyer Status", color=self.COR_PLATFORM)
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.add_field(name="👨‍💻 Criador", value="<@1304003843172077659>", inline=True)
+        embed.add_field(name="👨‍💻 Desenvolvedor", value="<@1304003843172077659>", inline=True)
         embed.add_field(name="⏳ Uptime", value=f"`{uptime}`", inline=True)
         embed.add_field(name="📡 Servidores", value=f"`{len(self.bot.guilds)}`", inline=True)
         embed.add_field(name="⚡ Prefixo", value="`?`", inline=True)
-        embed.add_field(name="📚 Versão", value="`2.0.1 - stable`", inline=True)
-        embed.set_footer(text="Platform Destroyer 2026")
+        embed.add_field(name="📚 Linguagem", value="`Python (discord.py)`", inline=True)
+        embed.add_field(name="⚙️ Versão", value="`2.0.1`", inline=True)
+        embed.set_footer(text="? Software de Automação s3ventzz")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="nicktroll", description="trolla o apelido de um membro")
@@ -174,31 +149,23 @@ class utilitarios(commands.Cog):
             await membro.edit(nick=nome)
             if not ctx.interaction: await ctx.message.delete()
             await ctx.send(f"✅ Apelido de {membro.mention} alterado!", delete_after=3)
-        except discord.Forbidden:
-            await ctx.send("❌ Erro de hierarquia!", delete_after=5)
+        except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
 
     @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
     async def say(self, ctx, *, mensagem: str):
-        if ctx.author.id != ID_DONO:
-            return await ctx.send("❌ Este comando é exclusivo do desenvolvedor.", ephemeral=True)
+        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
         if not ctx.interaction: await ctx.message.delete()
         await ctx.send(mensagem)
 
     @commands.hybrid_command(name="embed", description="envia uma mensagem personalizada em embed")
     async def embed(self, ctx):
-        if ctx.author.id != ID_DONO:
-            return await ctx.send("❌ Este comando é exclusivo do desenvolvedor.", ephemeral=True)
-        
-        if ctx.interaction:
-            await ctx.interaction.response.send_modal(EmbedModal())
+        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
+        if ctx.interaction: await ctx.interaction.response.send_modal(EmbedModal())
         else:
             view = ui.View()
             btn = ui.Button(label="Abrir Editor", style=discord.ButtonStyle.blurple, emoji="📝")
             async def callback(interaction):
-                if interaction.user.id == ID_DONO:
-                    await interaction.response.send_modal(EmbedModal())
-                else:
-                    await interaction.response.send_message("Apenas o dono pode abrir este editor!", ephemeral=True)
+                if interaction.user.id == ID_DONO: await interaction.response.send_modal(EmbedModal())
             btn.callback = callback
             view.add_item(btn)
             await ctx.send("Clique abaixo para criar seu embed:", view=view, delete_after=60)
@@ -206,16 +173,17 @@ class utilitarios(commands.Cog):
     @commands.hybrid_command(name="userinfo", description="mostra informações detalhadas de um usuário")
     async def userinfo(self, ctx, membro: discord.Member = None):
         membro = membro or ctx.author
-        status_traduzido = {"online": "🟢 online", "idle": "🌙 ausente", "dnd": "🔴 não perturbe", "offline": "⚪ offline"}
-        status = status_traduzido.get(str(membro.status), "⚪ offline")
+        status_traduzido = {"online": "🟢 Online", "idle": "🌙 Ausente", "dnd": "🔴 Não Perturbe", "offline": "⚪ Offline"}
+        status = status_traduzido.get(str(membro.status), "⚪ Offline")
         cargos = [role.mention for role in membro.roles if role.name != "@everyone"]
-
-        embed = discord.Embed(title=f"👤 Informações de {membro.name}", color=self.COR_PLATFORM)
+        embed = discord.Embed(title=f"👤 {membro.name}", color=self.COR_PLATFORM)
         embed.set_thumbnail(url=membro.display_avatar.url)
         embed.add_field(name="🆔 ID", value=f"`{membro.id}`", inline=True)
         embed.add_field(name="🌐 Status", value=status, inline=True)
-        embed.add_field(name="📅 Conta criada", value=f"<t:{int(membro.created_at.timestamp())}:R>", inline=False)
-        embed.add_field(name=f"🛡️ Cargos ({len(cargos)})", value=" ".join(cargos[:10]) if cargos else "Nenhum", inline=False)
+        embed.add_field(name="📅 Criada em", value=f"<t:{int(membro.created_at.timestamp())}:D>", inline=True)
+        embed.add_field(name="📥 Entrada", value=f"<t:{int(membro.joined_at.timestamp())}:R>", inline=True)
+        embed.add_field(name=f"🛡️ Cargos ({len(cargos)})", value=" ".join(cargos[:5]) if cargos else "Nenhum", inline=False)
+        embed.set_footer(text=f"? ID do Autor: {ctx.author.id}")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="avatar", description="mostra o avatar de um usuário")
@@ -229,9 +197,7 @@ class utilitarios(commands.Cog):
     async def banner(self, ctx, membro: discord.Member = None):
         membro = membro or ctx.author
         user = await self.bot.fetch_user(membro.id)
-        if not user.banner:
-            return await ctx.send("❌ Este usuário não possui um banner.", ephemeral=True)
-        
+        if not user.banner: return await ctx.send("❌ Sem banner.", ephemeral=True)
         embed = discord.Embed(title=f"🚩 Banner de {membro.name}", color=self.COR_PLATFORM)
         embed.set_image(url=user.banner.url)
         await ctx.send(embed=embed)
@@ -240,7 +206,7 @@ class utilitarios(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-        await ctx.send("🔒 | Canal bloqueado! Use `?unlock` para destravar.")
+        await ctx.send("🔒 | Canal bloqueado!")
 
     @commands.hybrid_command(name="unlock", description="destranca o canal atual")
     @commands.has_permissions(manage_channels=True)
@@ -260,13 +226,19 @@ class utilitarios(commands.Cog):
 
     @commands.hybrid_command(name="help", description="central de ajuda interativa")
     async def help(self, ctx):
-        embed = discord.Embed(title="📚 Central de Ajuda", description="Escolha uma categoria abaixo:", color=self.COR_PLATFORM)
+        embed = discord.Embed(
+            title="📚 Central de Ajuda", 
+            description="Selecione uma categoria no menu abaixo para ver os comandos disponíveis.\n\n*Caso o menu expire, use o comando novamente.*", 
+            color=self.COR_PLATFORM
+        )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_image(url="https://res.cloudinary.com/dv0xl7skh/image/upload/v1770493528/banner_exemplo.png")
         view = HelpView(self.bot, ["Ticket", "Jishaku", "Seguranca"])
         await ctx.send(embed=embed, view=view)
 
-
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
