@@ -5,10 +5,10 @@ import datetime
 import time
 
 ID_DONO = 1304003843172077659
-CARGOS_WHITELIST = [1414283452878028800, 1357569800947236999, 1357569800947236998, 1414283694662750268, 1357569800947237000, 1357569800947237003]
+CARGOS_WHITELIST = [1357569800947236998, 1414283694662750268, 1357569800947237000]
 
 EMOJI_SETA = "<:seta:1384562807369895946>"
-EMOJI_PD = "<:pd:1413985224223621212>"
+EMOJI_SERVER = "<:server:1413985224223621212>"
 
 class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
     titulo = ui.TextInput(label="Título", placeholder="Título do aviso...", required=True)
@@ -62,7 +62,7 @@ class HelpSelect(ui.Select):
         cmds = [f"`{c.name}`" for c in cog.get_commands() if not c.hidden]
         
         embed = discord.Embed(
-            description=f"{EMOJI_PD} **Categoria: {self.values[0].capitalize()}**\n\n{' '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
+            description=f"{EMOJI_SERVER} **Categoria: {self.values[0].capitalize()}**\n\n{' '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
             color=discord.Color.from_rgb(86, 3, 173)
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
@@ -100,7 +100,7 @@ class utilitarios(commands.Cog):
                 timestamp = int(dados['tempo'])
                 motivo = dados['motivo']
                 embed = discord.Embed(
-                    description=f"{EMOJI_PD} {membro.mention} está **AFK** no momento.\n\n{EMOJI_SETA} **Motivo:** {motivo}\n{EMOJI_SETA} **Desde:** <t:{timestamp}:R>",
+                    description=f"{EMOJI_SERVER} {membro.mention} está **AFK** no momento.\n\n{EMOJI_SETA} **Motivo:** {motivo}\n{EMOJI_SETA} **Desde:** <t:{timestamp}:R>",
                     color=self.COR_PLATFORM
                 )
                 await message.reply(embed=embed, delete_after=15)
@@ -112,7 +112,7 @@ class utilitarios(commands.Cog):
         self.afk_users[ctx.author.id] = {"motivo": motivo, "tempo": time.time(), "nick_original": nick_original}
         try: await ctx.author.edit(nick=novo_nick)
         except: pass
-        embed = discord.Embed(description=f"{EMOJI_PD} {ctx.author.mention}, seu AFK foi definido!\n{EMOJI_SETA} Motivo: **{motivo}**", color=self.COR_PLATFORM)
+        embed = discord.Embed(description=f"{EMOJI_SERVER} {ctx.author.mention}, seu AFK foi definido!\n{EMOJI_SETA} Motivo: **{motivo}**", color=self.COR_PLATFORM)
         await ctx.send(embed=embed, delete_after=10)
 
     @commands.hybrid_command(name="serverinfo", description="mostra informações detalhadas do servidor")
@@ -142,9 +142,9 @@ class utilitarios(commands.Cog):
         embed.set_author(name="Platform Destroyer", icon_url=self.bot.user.display_avatar.url)
         
         desc = (
-            f" **Dev:** <@1304003843172077659>\n"
-            f" **Ping:** `{round(self.bot.latency * 1000)}ms`\n"
-            f" **Uptime:** `{uptime}`\n"
+            f"{EMOJI_SETA} **Dev:** <@1304003843172077659>\n"
+            f"{EMOJI_SETA} **Ping:** `{round(self.bot.latency * 1000)}ms`\n"
+            f"{EMOJI_SETA} **Uptime:** `{uptime}`\n"
             "──────────────────────────────\n"
             f"{EMOJI_SETA} **Servidores:** `{len(self.bot.guilds)}`\n"
             f"{EMOJI_SETA} **Linguagem:** Python (discord.py)\n"
@@ -160,7 +160,7 @@ class utilitarios(commands.Cog):
         try:
             await membro.edit(nick=nome)
             if not ctx.interaction: await ctx.message.delete()
-            await ctx.send(f"{EMOJI_PD} Apelido de {membro.mention} alterado!", delete_after=3)
+            await ctx.send(f"{EMOJI_SETA} Apelido de {membro.mention} alterado!", delete_after=3)
         except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
 
     @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
@@ -197,7 +197,7 @@ class utilitarios(commands.Cog):
             f"{EMOJI_SETA} **Criado:** <t:{int(membro.created_at.timestamp())}:D>\n"
             f"{EMOJI_SETA} **Entrou:** <t:{int(membro.joined_at.timestamp())}:R>\n"
             "──────────────────────────────\n"
-            f"{EMOJI_PD} **Cargos ({len(roles)}):**\n"
+            f"{EMOJI_SERVER} **Cargos ({len(roles)}):**\n"
             f"{' '.join(roles[:5]) if roles else 'Nenhum'}"
         )
         embed.description = desc
@@ -231,24 +231,19 @@ class utilitarios(commands.Cog):
             if role:
                 await ctx.channel.set_permissions(role, send_messages=True)
                 cargos_mencionados.append(role.mention)
-
-        for role in ctx.guild.roles:
-            if (role.permissions.manage_channels or role.permissions.administrator) and role.name != "@everyone":
-                if role.mention not in cargos_mencionados:
-                    cargos_mencionados.append(role.mention)
         
         lista_cargos = ", ".join(cargos_mencionados) if cargos_mencionados else "Nenhum cargo extra"
         
         mensagem = (
-            f"{EMOJI_PD} | Canal bloqueado com sucesso! Use `?unlock` para destravar!\n"
-            f" | Os cargos {lista_cargos} ainda poderão falar no canal devido as permissões configuradas!"
+            f"{EMOJI_SETA} | Canal bloqueado com sucesso! Use `?unlock` para destravar!\n"
+            f"🔹 | Os cargos {lista_cargos} ainda poderão falar no canal devido as permissões configuradas!"
         )
         await ctx.send(mensagem, allowed_mentions=discord.AllowedMentions.none())
 
     @commands.hybrid_command(name="unlock", description="destranca o canal atual")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
-        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=None)
+        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=None)
         
         for role_id in CARGOS_WHITELIST:
             role = ctx.guild.get_role(role_id)
@@ -270,7 +265,7 @@ class utilitarios(commands.Cog):
     @commands.hybrid_command(name="help", description="central de ajuda interativa")
     async def help(self, ctx):
         embed = discord.Embed(
-            description=f"{EMOJI_PD}} **Central de Ajuda**\n\n{EMOJI_SETA} Selecione uma categoria no menu abaixo para ver os comandos disponíveis.", 
+            description=f"{EMOJI_SERVER} **Central de Ajuda**\n\n{EMOJI_SETA} Selecione uma categoria no menu abaixo para ver os comandos disponíveis.", 
             color=self.COR_PLATFORM
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
