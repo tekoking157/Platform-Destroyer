@@ -32,6 +32,83 @@ async def registrar_ticket_site(payload):
                 return response.status
     except: return None
 
+class ReivindicarView(discord.ui.View):
+    def __init__(self, usuario_id=None, tipo=None, staff_id=None):
+        super().__init__(timeout=None)
+        self.usuario_id = usuario_id
+        self.tipo = tipo
+        self.staff_id = staff_id
+
+    @discord.ui.button(label="Reivindicar", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_claim_perma")
+    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
+        pode_reivindicar = interaction.user.id == ID_DONO_BOT or any(role.id in ids_permitidos for role in interaction.user.roles)
+
+        if not pode_reivindicar:
+            return await interaction.response.send_message("❌ Você não tem permissão para reivindicar este ticket.", ephemeral=True)
+
+        await interaction.response.defer()
+        
+        self.staff_id = interaction.user.id
+        await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
+
+        await registrar_ticket_site({
+            "action": "claim", "discord_channel_id": str(interaction.channel.id),
+            "assigned_to": str(interaction.user.id), "assigned_username": interaction.user.name
+        })
+
+        button.disabled = True
+        button.label = "Reivindicado"
+        await interaction.edit_original_response(view=self)
+        await interaction.channel.send(f"🛡️ Atendimento iniciado por {interaction.user.mention}")
+
+    @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
+    async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
+        pode_fechar = (self.staff_id and interaction.user.id == self.staff_id) or \
+                      interaction.user.id == ID_DONO_BOT or \
+                      any(role.id in ids_permitidos for role in interaction.user.roles)
+
+        if not pode_fechar:
+            return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
+
+        await interaction.response.send_message("💾 Salvando logs e fechando em 5 segundos...")
+        
+        data_abertura = "N/A"
+        if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
+            data_abertura = interaction.channel.topic.split("Aberto: ")[1]
+        
+        data_fechamento = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
+        reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
+        
+        log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
+        mensagens = []
+        async for msg in interaction.channel.history(limit=None, oldest_first=True):
+            time_str = msg.created_at.strftime('%d/%m %H:%M')
+            mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
+        
+        buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
+        
+        if log_canal:
+            embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
+            embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
+            embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
+            embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
+            embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
+            embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
+            embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
+            embed_log.add_field(name="Motivo para fechar o Ticket", value="No Reason Provided", inline=False)
+            
+            file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
+            await log_canal.send(embed=embed_log, file=file)
+
+        await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
+        await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
+
+        await asyncio.sleep(5)
+        await interaction.channel.delete()
+
 class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -88,86 +165,6 @@ class TicketView(discord.ui.View):
         await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo))
         await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
 
-class ReivindicarView(discord.ui.View):
-    def __init__(self, usuario_id=None, tipo=None, staff_id=None):
-        super().__init__(timeout=None)
-        self.usuario_id = usuario_id
-        self.tipo = tipo
-        self.staff_id = staff_id
-
-    @discord.ui.button(label="Reivindicar", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_claim_perma")
-    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
-        pode_reivindicar = interaction.user.id == ID_DONO_BOT or any(role.id in ids_permitidos for role in interaction.user.roles)
-
-        if not pode_reivindicar:
-            return await interaction.response.send_message("❌ Você não tem permissão para reivindicar este ticket.", ephemeral=True)
-
-        await interaction.response.defer()
-        
-        self.staff_id = interaction.user.id
-        await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
-
-        await registrar_ticket_site({
-            "action": "claim", "discord_channel_id": str(interaction.channel.id),
-            "assigned_to": str(interaction.user.id), "assigned_username": interaction.user.name
-        })
-
-        button.disabled = True
-        button.label = "Reivindicado"
-        await interaction.edit_original_response(view=self)
-        await interaction.channel.send(f"🛡️ Atendimento iniciado por {interaction.user.mention}")
-
-    @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
-    async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
-        pode_fechar = (self.staff_id and interaction.user.id == self.staff_id) or \
-                      interaction.user.id == ID_DONO_BOT or \
-                      any(role.id in ids_permitidos for role in interaction.user.roles)
-
-        if not pode_fechar:
-            return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
-
-        await interaction.response.send_message("💾 Salvando logs e fechando em 5 segundos...")
-        
-        # Coleta de informações para a Log
-        data_abertura = "N/A"
-        if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
-            data_abertura = interaction.channel.topic.split("Aberto: ")[1]
-        
-        data_fechamento = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-        autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
-        reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
-        
-        await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
-        await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
-
-        log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
-        mensagens = []
-        async for msg in interaction.channel.history(limit=None, oldest_first=True):
-            time_str = msg.created_at.strftime('%d/%m %H:%M')
-            mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
-        
-        buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
-        
-        if log_canal:
-            embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
-            embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
-            embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
-            embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
-            embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
-            embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
-            embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
-            embed_log.add_field(name="Motivo para fechar o Ticket", value="No Reason Provided", inline=False)
-            
-            file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
-            
-            # Botão de Transcrição simulado pelo link do arquivo enviado
-            await log_canal.send(embed=embed_log, file=file)
-
-        await asyncio.sleep(5)
-        await interaction.channel.delete()
-
 class ticket(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -199,5 +196,6 @@ async def setup(bot):
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
     
+
 
 
