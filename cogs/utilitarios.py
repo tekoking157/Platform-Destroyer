@@ -6,6 +6,10 @@ import time
 
 ID_DONO = 1304003843172077659
 
+# Definição dos Emojis
+EMOJI_SETA = "<:seta:1384562807369895946>"
+EMOJI_SERVER = "<:server:1413985224223621212>"
+
 class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
     titulo = ui.TextInput(label="Título", placeholder="Título do aviso...", required=True)
     descricao = ui.TextInput(label="Descrição", style=discord.TextStyle.paragraph, placeholder="Conteúdo principal...", required=True)
@@ -33,7 +37,7 @@ class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
             
         embed.set_footer(text=f"Enviado por: {interaction.user.name}", icon_url=interaction.user.display_avatar.url)
         
-        await interaction.response.send_message("✅ Embed enviado com sucesso!", ephemeral=True)
+        await interaction.response.send_message(f"{EMOJI_SETA} Embed enviado com sucesso!", ephemeral=True)
         await interaction.channel.send(embed=embed)
 
 class HelpSelect(ui.Select):
@@ -42,28 +46,27 @@ class HelpSelect(ui.Select):
             discord.SelectOption(
                 label=name.capitalize(), 
                 description=f"Comandos do módulo {name}", 
-                emoji="📁",
+                emoji=discord.PartialEmoji.from_str(EMOJI_SETA),
                 value=name  
             )
             for name, cog in bot.cogs.items() if name not in esconder
         ]
-        super().__init__(placeholder="? Escolha uma categoria para ver os comandos...", options=options)
+        super().__init__(placeholder="Selecione uma categoria...", options=options)
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
         cog = self.bot.get_cog(self.values[0])
         if not cog:
-            return await interaction.response.send_message(f"❌ Erro: A categoria '{self.values[0]}' não foi encontrada.", ephemeral=True)
+            return await interaction.response.send_message(f"❌ Categoria '{self.values[0]}' não encontrada.", ephemeral=True)
             
         cmds = [f"`{c.name}`" for c in cog.get_commands() if not c.hidden]
         
         embed = discord.Embed(
-            title=f"📁 Categoria: {self.values[0].capitalize()}",
-            description=f"Aqui estão os comandos disponíveis:\n\n{' | '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
+            description=f"{EMOJI_SERVER} **Categoria: {self.values[0].capitalize()}**\n\n{' '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
             color=discord.Color.from_rgb(86, 3, 173)
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text=f"? Total de {len(cmds)} comandos | Platform Destroyer")
+        embed.set_footer(text=f"Total de {len(cmds)} comandos | Platform Destroyer")
         await interaction.response.edit_message(embed=embed)
 
 class HelpView(ui.View):
@@ -97,7 +100,7 @@ class utilitarios(commands.Cog):
                 timestamp = int(dados['tempo'])
                 motivo = dados['motivo']
                 embed = discord.Embed(
-                    description=f"💤 {membro.mention} está **AFK** no momento.\n\n**Motivo:** {motivo}\n**Desde:** <t:{timestamp}:R>",
+                    description=f"{EMOJI_SERVER} {membro.mention} está **AFK** no momento.\n\n{EMOJI_SETA} **Motivo:** {motivo}\n{EMOJI_SETA} **Desde:** <t:{timestamp}:R>",
                     color=self.COR_PLATFORM
                 )
                 await message.reply(embed=embed, delete_after=15)
@@ -109,37 +112,46 @@ class utilitarios(commands.Cog):
         self.afk_users[ctx.author.id] = {"motivo": motivo, "tempo": time.time(), "nick_original": nick_original}
         try: await ctx.author.edit(nick=novo_nick)
         except: pass
-        embed = discord.Embed(description=f"✅ {ctx.author.mention}, seu AFK foi definido!\nMotivo: **{motivo}**", color=self.COR_PLATFORM)
+        embed = discord.Embed(description=f"{EMOJI_SERVER} {ctx.author.mention}, seu AFK foi definido!\n{EMOJI_SETA} Motivo: **{motivo}**", color=self.COR_PLATFORM)
         await ctx.send(embed=embed, delete_after=10)
 
     @commands.hybrid_command(name="serverinfo", description="mostra informações detalhadas do servidor")
     async def serverinfo(self, ctx):
         g = ctx.guild
-        embed = discord.Embed(title=f"🏰 {g.name}", color=self.COR_PLATFORM)
-        embed.set_author(name="Informações do Servidor", icon_url=self.bot.user.display_avatar.url)
-        if g.icon: embed.set_thumbnail(url=g.icon.url)
+        embed = discord.Embed(color=self.COR_PLATFORM)
+        embed.set_author(name=f"{g.name}", icon_url=g.icon.url if g.icon else None)
         if g.banner: embed.set_image(url=g.banner.url)
-        embed.add_field(name="👑 Dono", value=f"{g.owner.mention}", inline=True)
-        embed.add_field(name="🆔 ID", value=f"`{g.id}`", inline=True)
-        embed.add_field(name="📅 Criado", value=f"<t:{int(g.created_at.timestamp())}:R>", inline=True)
-        embed.add_field(name="👥 Membros", value=f"Total: `{g.member_count}`\nBots: `{len([m for m in g.members if m.bot])}`", inline=True)
-        embed.add_field(name="✨ Boosts", value=f"Nível: `{g.premium_tier}`\nQtd: `{g.premium_subscription_count}`", inline=True)
-        embed.add_field(name="💬 Canais", value=f"Texto: `{len(g.text_channels)}`\nVoz: `{len(g.voice_channels)}`", inline=True)
-        embed.set_footer(text=f"? Solicitado por {ctx.author.name}")
+        
+        desc = (
+            f"{EMOJI_SETA} **Dono:** {g.owner.mention} (`{g.owner_id}`)\n"
+            f"{EMOJI_SETA} **ID:** `{g.id}`\n"
+            f"{EMOJI_SETA} **Criado:** <t:{int(g.created_at.timestamp())}:R>\n"
+            "──────────────────────────────\n"
+            f"{EMOJI_SETA} **Membros:** `{g.member_count}` (Bots: `{len([m for m in g.members if m.bot])}`)\n"
+            f"{EMOJI_SETA} **Boosts:** Nível `{g.premium_tier}` ({g.premium_subscription_count} boosts)\n"
+            f"{EMOJI_SETA} **Canais:** Texto: `{len(g.text_channels)}` | Voz: `{len(g.voice_channels)}`"
+        )
+        embed.description = desc
+        embed.set_footer(text=f"Solicitado por {ctx.author.name}", icon_url=ctx.author.display_avatar.url)
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="botinfo", description="mostra informações técnicas sobre o bot")
     async def botinfo(self, ctx):
         uptime = str(datetime.timedelta(seconds=int(round(time.time() - self.start_time))))
-        embed = discord.Embed(title="🚀 Platform Destroyer Status", color=self.COR_PLATFORM)
+        embed = discord.Embed(color=self.COR_PLATFORM)
+        embed.set_author(name="Platform Destroyer", icon_url=self.bot.user.display_avatar.url)
+        
+        desc = (
+            f"{EMOJI_SETA} **Dev:** <@1304003843172077659>\n"
+            f"{EMOJI_SETA} **Ping:** `{round(self.bot.latency * 1000)}ms`\n"
+            f"{EMOJI_SETA} **Uptime:** `{uptime}`\n"
+            "──────────────────────────────\n"
+            f"{EMOJI_SETA} **Servidores:** `{len(self.bot.guilds)}`\n"
+            f"{EMOJI_SETA} **Linguagem:** Python (discord.py)\n"
+            f"{EMOJI_SETA} **Versão:** `2.0.1`"
+        )
+        embed.description = desc
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.add_field(name="👨‍💻 Desenvolvedor", value="<@1304003843172077659>", inline=True)
-        embed.add_field(name="⏳ Uptime", value=f"`{uptime}`", inline=True)
-        embed.add_field(name="📡 Servidores", value=f"`{len(self.bot.guilds)}`", inline=True)
-        embed.add_field(name="⚡ Prefixo", value="`?`", inline=True)
-        embed.add_field(name="📚 Linguagem", value="`Python (discord.py)`", inline=True)
-        embed.add_field(name="⚙️ Versão", value="`2.0.1`", inline=True)
-        embed.set_footer(text="? Software de Automação s3ventzz")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="nicktroll", description="trolla o apelido de um membro")
@@ -148,7 +160,7 @@ class utilitarios(commands.Cog):
         try:
             await membro.edit(nick=nome)
             if not ctx.interaction: await ctx.message.delete()
-            await ctx.send(f"✅ Apelido de {membro.mention} alterado!", delete_after=3)
+            await ctx.send(f"{EMOJI_SETA} Apelido de {membro.mention} alterado!", delete_after=3)
         except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
 
     @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
@@ -163,7 +175,7 @@ class utilitarios(commands.Cog):
         if ctx.interaction: await ctx.interaction.response.send_modal(EmbedModal())
         else:
             view = ui.View()
-            btn = ui.Button(label="Abrir Editor", style=discord.ButtonStyle.blurple, emoji="📝")
+            btn = ui.Button(label="Abrir Editor", style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str(EMOJI_SETA))
             async def callback(interaction):
                 if interaction.user.id == ID_DONO: await interaction.response.send_modal(EmbedModal())
             btn.callback = callback
@@ -173,23 +185,29 @@ class utilitarios(commands.Cog):
     @commands.hybrid_command(name="userinfo", description="mostra informações detalhadas de um usuário")
     async def userinfo(self, ctx, membro: discord.Member = None):
         membro = membro or ctx.author
-        status_traduzido = {"online": "🟢 Online", "idle": "🌙 Ausente", "dnd": "🔴 Não Perturbe", "offline": "⚪ Offline"}
-        status = status_traduzido.get(str(membro.status), "⚪ Offline")
-        cargos = [role.mention for role in membro.roles if role.name != "@everyone"]
-        embed = discord.Embed(title=f"👤 {membro.name}", color=self.COR_PLATFORM)
+        roles = [role.mention for role in membro.roles if role.name != "@everyone"]
+        
+        embed = discord.Embed(color=self.COR_PLATFORM)
+        embed.set_author(name=f"{membro.name}", icon_url=membro.display_avatar.url)
         embed.set_thumbnail(url=membro.display_avatar.url)
-        embed.add_field(name="🆔 ID", value=f"`{membro.id}`", inline=True)
-        embed.add_field(name="🌐 Status", value=status, inline=True)
-        embed.add_field(name="📅 Criada em", value=f"<t:{int(membro.created_at.timestamp())}:D>", inline=True)
-        embed.add_field(name="📥 Entrada", value=f"<t:{int(membro.joined_at.timestamp())}:R>", inline=True)
-        embed.add_field(name=f"🛡️ Cargos ({len(cargos)})", value=" ".join(cargos[:5]) if cargos else "Nenhum", inline=False)
-        embed.set_footer(text=f"? ID do Autor: {ctx.author.id}")
+        
+        desc = (
+            f"{EMOJI_SETA} **Tag:** {membro.mention}\n"
+            f"{EMOJI_SETA} **ID:** `{membro.id}`\n"
+            f"{EMOJI_SETA} **Criado:** <t:{int(membro.created_at.timestamp())}:D>\n"
+            f"{EMOJI_SETA} **Entrou:** <t:{int(membro.joined_at.timestamp())}:R>\n"
+            "──────────────────────────────\n"
+            f"{EMOJI_SERVER} **Cargos ({len(roles)}):**\n"
+            f"{' '.join(roles[:5]) if roles else 'Nenhum'}"
+        )
+        embed.description = desc
+        embed.set_footer(text=f"ID do Autor: {ctx.author.id}")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="avatar", description="mostra o avatar de um usuário")
     async def avatar(self, ctx, membro: discord.Member = None):
         membro = membro or ctx.author
-        embed = discord.Embed(title=f"🖼️ Avatar de {membro.name}", color=self.COR_PLATFORM)
+        embed = discord.Embed(title=f"Avatar de {membro.name}", color=self.COR_PLATFORM)
         embed.set_image(url=membro.display_avatar.url)
         await ctx.send(embed=embed)
 
@@ -198,7 +216,7 @@ class utilitarios(commands.Cog):
         membro = membro or ctx.author
         user = await self.bot.fetch_user(membro.id)
         if not user.banner: return await ctx.send("❌ Sem banner.", ephemeral=True)
-        embed = discord.Embed(title=f"🚩 Banner de {membro.name}", color=self.COR_PLATFORM)
+        embed = discord.Embed(title=f"Banner de {membro.name}", color=self.COR_PLATFORM)
         embed.set_image(url=user.banner.url)
         await ctx.send(embed=embed)
 
@@ -206,29 +224,28 @@ class utilitarios(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-        await ctx.send("🔒 | Canal bloqueado!")
+        await ctx.send(f"{EMOJI_SETA} Canal bloqueado!")
 
     @commands.hybrid_command(name="unlock", description="destranca o canal atual")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=None)
-        await ctx.send("🔓 | Canal desbloqueado!")
+        await ctx.send(f"{EMOJI_SETA} Canal desbloqueado!")
 
     @commands.hybrid_command(name="ping", description="mostra a latência do bot")
     async def ping(self, ctx):
-        await ctx.send(f"🛰️ | Pong! **{round(self.bot.latency * 1000)}ms**")
+        await ctx.send(f"{EMOJI_SERVER} Pong! **{round(self.bot.latency * 1000)}ms**")
 
     @commands.hybrid_command(name="slowmode", description="define o slowmode do canal")
     @commands.has_permissions(manage_channels=True)
     async def slowmode(self, ctx, segundos: int):
         await ctx.channel.edit(slowmode_delay=segundos)
-        await ctx.send(f"🕒 Modo lento: **{segundos}s**.")
+        await ctx.send(f"{EMOJI_SETA} Modo lento: **{segundos}s**.")
 
     @commands.hybrid_command(name="help", description="central de ajuda interativa")
     async def help(self, ctx):
         embed = discord.Embed(
-            title="📚 Central de Ajuda", 
-            description="Selecione uma categoria no menu abaixo para ver os comandos disponíveis.\n\n*Caso o menu expire, use o comando novamente.*", 
+            description=f"{EMOJI_SERVER} **Central de Ajuda**\n\n{EMOJI_SETA} Selecione uma categoria no menu abaixo para ver os comandos disponíveis.", 
             color=self.COR_PLATFORM
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
