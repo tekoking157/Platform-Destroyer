@@ -112,6 +112,9 @@ class punicoes(commands.Cog):
 
     async def checar_hierarquia(self, ctx, membro: discord.Member):
         if not isinstance(membro, discord.Member): return True
+        if membro.id == ctx.author.id:
+            await ctx.send("❌ Não posso executar essa punição porque o alvo é você mesmo... você é doido?", delete_after=15)
+            return False
         if ctx.author.id == ctx.guild.owner_id: return True
         if membro.id == self.bot.user.id: return False
         if membro.top_role >= ctx.author.top_role and ctx.author.id != ctx.guild.owner_id:
