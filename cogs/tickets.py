@@ -11,6 +11,7 @@ COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
 BANNER_URL = "https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif"
 ID_CATEGORIA_TICKETS = 1357569803778392269
 ID_CANAL_LOG_TICKETS = 1392528999623692460 
+ID_CANAL_AVALIACOES = 1385313899699765380
 ID_DONO_BOT = 1304003843172077659
 ID_CARGO_SETUP = 1357569800947237000
 ID_CARGO_SUPORTE = 1357569800938721349
@@ -43,12 +44,13 @@ def registrar_stats_local(staff_id, nota=None):
     if data[sid]["data"] != hoje:
         data[sid]["hoje"] = 0
         data[sid]["data"] = hoje
-    data[sid]["total"] += 1
-    data[sid]["hoje"] += 1
-    data[sid]["ultimo"] = hoje
     if nota:
         data[sid]["av_count"] += 1
         data[sid]["soma"] += int(nota)
+    else:
+        data[sid]["total"] += 1
+        data[sid]["hoje"] += 1
+        data[sid]["ultimo"] = hoje
     salvar_stats(data)
 
 async def registrar_ticket_site(payload):
@@ -58,10 +60,45 @@ async def registrar_ticket_site(payload):
                 return response.status
     except: return None
 
+class ComentarioModal(discord.ui.Modal, title="Avaliação do Atendimento"):
+    comentario = discord.ui.TextInput(label="Feedback", style=discord.TextStyle.paragraph, placeholder="Conte-nos como foi o seu atendimento...", required=True)
+    
+    def __init__(self, staff_id, nota, channel_name, channel_id, user_id):
+        super().__init__()
+        self.staff_id = staff_id
+        self.nota = nota
+        self.channel_name = channel_name
+        self.channel_id = channel_id
+        self.user_id = user_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        registrar_stats_local(self.staff_id, self.nota)
+        
+        log_av = interaction.guild.get_channel(ID_CANAL_AVALIACOES)
+        if log_av:
+            embed = discord.Embed(title="Ticket Rating", color=COR_PLATFORM)
+            embed.add_field(name="Nome do Ticket", value=f"{self.channel_name}", inline=True)
+            embed.add_field(name="Channel ID", value=f"{self.channel_id}", inline=True)
+            embed.add_field(name="Criado Por", value=f"<@{self.user_id}>", inline=True)
+            embed.add_field(name="Claimed By", value=f"<@{self.staff_id}>", inline=True)
+            embed.add_field(name="Rating", value="⭐" * int(self.nota), inline=True)
+            embed.add_field(name="User Feedback", value=self.comentario.value, inline=False)
+            
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="View Transcript", style=discord.ButtonStyle.link, url=f"https://discord.com/channels/{interaction.guild.id}/{ID_CANAL_LOG_TICKETS}"))
+            view.add_item(discord.ui.Button(label="View Ticket Info", style=discord.ButtonStyle.link, url=f"https://discord.com/channels/{interaction.guild.id}/{ID_CANAL_LOG_TICKETS}"))
+            
+            await log_av.send(embed=embed, view=view)
+
+        await interaction.response.send_message(f"✅ Obrigado por avaliar o atendimento de <@{self.staff_id}>", ephemeral=True)
+
 class AvaliacaoDMView(discord.ui.View):
-    def __init__(self, staff_id):
+    def __init__(self, staff_id, channel_name, channel_id, user_id):
         super().__init__(timeout=86400)
         self.staff_id = staff_id
+        self.channel_name = channel_name
+        self.channel_id = channel_id
+        self.user_id = user_id
 
     @discord.ui.select(
         placeholder="Escolha uma nota de 1 a 5",
@@ -74,8 +111,7 @@ class AvaliacaoDMView(discord.ui.View):
         ]
     )
     async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
-        registrar_stats_local(self.staff_id, select.values[0])
-        await interaction.response.send_message(f"✅ Obrigado por avaliar o atendimento de <@{self.staff_id}>")
+        await interaction.response.send_modal(ComentarioModal(self.staff_id, select.values[0], self.channel_name, self.channel_id, self.user_id))
         self.stop()
 
 class ReivindicarView(discord.ui.View):
@@ -205,7 +241,7 @@ class ReivindicarView(discord.ui.View):
             try:
                 user = await interaction.client.fetch_user(self.usuario_id)
                 e_dm = discord.Embed(title="Avalie nosso atendimento", description=f"Seu ticket em **{interaction.guild.name}** foi finalizado por <@{self.staff_id}>.\nComo você avalia o suporte recebido?", color=COR_PLATFORM)
-                await user.send(embed=e_dm, view=AvaliacaoDMView(self.staff_id))
+                await user.send(embed=e_dm, view=AvaliacaoDMView(self.staff_id, interaction.channel.name, interaction.channel.id, self.usuario_id))
             except: pass
 
         registrar_stats_local(self.staff_id)
@@ -336,6 +372,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
