@@ -59,8 +59,6 @@ class PlatformDestroyer(commands.Bot):
             if interaction.type == discord.InteractionType.application_command:
                 if interaction.data.get('name') != "manutencao":
                     return await interaction.response.send_message("🚧 **Modo Manutenção:** O bot está sendo atualizado e voltará em breve!", ephemeral=True)
-        
-        await self.tree.process_interactions(interaction)
 
 bot = PlatformDestroyer()
 
