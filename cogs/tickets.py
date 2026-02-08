@@ -39,12 +39,13 @@ def registrar_stats_local(staff_id, nota=None):
     sid = str(staff_id)
     hoje = datetime.datetime.now().strftime("%Y-%m-%d")
     if sid not in data:
-        data[sid] = {"total": 0, "hoje": 0, "av_count": 0, "soma": 0, "data": hoje}
+        data[sid] = {"total": 0, "hoje": 0, "av_count": 0, "soma": 0, "data": hoje, "primeiro": hoje, "ultimo": hoje}
     if data[sid]["data"] != hoje:
         data[sid]["hoje"] = 0
         data[sid]["data"] = hoje
     data[sid]["total"] += 1
     data[sid]["hoje"] += 1
+    data[sid]["ultimo"] = hoje
     if nota:
         data[sid]["av_count"] += 1
         data[sid]["soma"] += int(nota)
@@ -289,6 +290,7 @@ class ticket(commands.Cog):
                 "• Destinado à tirar dúvidas e reportar erros nas scripts!\n\n"
                 "**🚨 Denúncia:**\n"
                 "• Destinado à denúncia de membros!\n\n"
+                ""
                 "Pedimos encarecidamente que não abram tickets com o intuito de brincadeiras.\n"
                 "Sejam empáticos com o próximo."
             ),
@@ -296,6 +298,39 @@ class ticket(commands.Cog):
         )
         embed.set_image(url=BANNER_URL)
         await ctx.send(embed=embed, view=TicketView())
+
+    @commands.hybrid_command(name="ticketstats", description="Vê as estatísticas de tickets de um staff")
+    async def ticketstats(self, ctx, staff: discord.Member = None):
+        staff = staff or ctx.author
+        data = carregar_stats()
+        sid = str(staff.id)
+
+        if sid not in data:
+            return await ctx.send(f"❌ <@{staff.id}> não possui estatísticas registradas.", ephemeral=True)
+
+        s = data[sid]
+        total = s.get("total", 0)
+        hoje = s.get("hoje", 0)
+        av_count = s.get("av_count", 0)
+        soma = s.get("soma", 0)
+        media = round(soma / av_count, 2) if av_count > 0 else 0
+        primeiro = s.get("primeiro", "N/A")
+        ultimo = s.get("ultimo", "N/A")
+
+        embed = discord.Embed(title=f"Estatísticas de @{staff.name}", color=COR_PLATFORM)
+        embed.set_thumbnail(url=staff.display_avatar.url)
+        
+        embed.add_field(name="<:Ticket:1385488194631499910> | Tickets Totais", value=f"{total}", inline=False)
+        embed.add_field(name="<:Clock:1385489000248119476> | Tickets Hoje", value=f"{hoje}", inline=False)
+        embed.add_field(name="<:Owner:1385488264789491782> | Avaliações Recebidas", value=f"{av_count}", inline=False)
+        embed.add_field(name="<:School:1385488266928722022> | Média de Avaliações", value=f"{media}/5", inline=False)
+        
+        embed.add_field(name="<:g_arrow_PD:1384562807369895946> | Primeiro Ticket", value=f"{primeiro}", inline=False)
+        embed.add_field(name="<:g_arrow_PD:1384562807369895946> | Último Ticket", value=f"{ultimo}", inline=False)
+        
+        embed.add_field(name="<:ticketa:1385848537618583713> Estatísticas Diárias", value=f"Total de tickets hoje: {hoje}", inline=False)
+
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     bot.add_view(TicketView())
