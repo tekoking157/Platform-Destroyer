@@ -28,7 +28,7 @@ TICKET_ENDPOINT = "https://otzrrxefahqeovfbonag.supabase.co/functions/v1/registe
 async def registrar_ticket_site(payload):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(TICKET_ENDPOINT, json=payload, timeout=10) as response:
+            async with session.post(TICKET_ENDPOINT, json=payload, timeout=5) as response:
                 return response.status
     except: return None
 
@@ -48,14 +48,13 @@ class ReivindicarView(discord.ui.View):
             return await interaction.response.send_message("❌ Você não tem permissão para reivindicar este ticket.", ephemeral=True)
 
         await interaction.response.defer()
-        
         self.staff_id = interaction.user.id
         await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
-
-        await registrar_ticket_site({
+        
+        asyncio.create_task(registrar_ticket_site({
             "action": "claim", "discord_channel_id": str(interaction.channel.id),
             "assigned_to": str(interaction.user.id), "assigned_username": interaction.user.name
-        })
+        }))
 
         button.disabled = True
         button.label = "Reivindicado"
@@ -72,8 +71,10 @@ class ReivindicarView(discord.ui.View):
         if not pode_fechar:
             return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
 
-        await interaction.response.send_message("💾 Salvando logs e fechando em 5 segundos...")
-        
+        # Resposta imediata para evitar timeout
+        await interaction.response.send_message("🔒 Fechando canal...")
+
+        # Coleta de dados para o log antes de apagar
         data_abertura = "N/A"
         if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
             data_abertura = interaction.channel.topic.split("Aberto: ")[1]
@@ -81,32 +82,37 @@ class ReivindicarView(discord.ui.View):
         data_fechamento = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
         reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
-        
-        log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
+
+        # Gerar log em memória
         mensagens = []
         async for msg in interaction.channel.history(limit=None, oldest_first=True):
             time_str = msg.created_at.strftime('%d/%m %H:%M')
             mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
-        
         buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
-        
-        if log_canal:
-            embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
-            embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
-            embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
-            embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
-            embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
-            embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
-            embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
-            embed_log.add_field(name="Motivo para fechar o Ticket", value="No Reason Provided", inline=False)
-            
-            file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
-            await log_canal.send(embed=embed_log, file=file)
 
-        await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
-        await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
+        # Enviar logs em segundo plano para não travar a deleção
+        async def processar_encerramento():
+            log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
+            if log_canal:
+                embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
+                embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
+                embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
+                embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
+                embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
+                embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
+                embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
+                embed_log.add_field(name="Motivo", value="No Reason Provided", inline=False)
+                
+                file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
+                await log_canal.send(embed=embed_log, file=file)
 
-        await asyncio.sleep(5)
+            await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
+            await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
+
+        asyncio.create_task(processar_encerramento())
+
+        # Deletar o canal AGORA
+        await asyncio.sleep(1)
         await interaction.channel.delete()
 
 class TicketView(discord.ui.View):
@@ -149,15 +155,15 @@ class TicketView(discord.ui.View):
             topic=f"Dono: {interaction.user.id} | Tipo: {tipo} | Aberto: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
         
-        await registrar_ticket_site({
+        asyncio.create_task(registrar_ticket_site({
             "action": "open", "discord_channel_id": str(canal.id),
             "discord_user_id": str(interaction.user.id), "discord_username": interaction.user.name,
             "subject": f"Ticket de {tipo}", "priority": "medium"
-        })
+        }))
 
         embed = discord.Embed(
             title=f"Atendimento - {tipo.upper()}", 
-            description=f"Olá {interaction.user.mention},\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
+            description=f"Olá {interaction.user.mention}\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
             color=COR_PLATFORM
         )
         embed.set_image(url=BANNER_URL)
@@ -196,6 +202,7 @@ async def setup(bot):
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
     
+
 
 
 
