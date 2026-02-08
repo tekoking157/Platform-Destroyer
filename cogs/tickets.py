@@ -65,7 +65,8 @@ class AvaliacaoModal(discord.ui.Modal, title="Avaliação do Atendimento"):
         if not self.nota.value.isdigit() or not (1 <= int(self.nota.value) <= 5):
             return await interaction.response.send_message("❌ Nota de 1 a 5.", ephemeral=True)
         registrar_stats_local(self.view_orig.staff_id, self.nota.value)
-        await interaction.response.send_message("✅ Avaliado com sucesso.")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("✅ Avaliado com sucesso.")
         await self.view_orig.fechar_final(interaction)
 
 class ReivindicarView(discord.ui.View):
@@ -80,7 +81,10 @@ class ReivindicarView(discord.ui.View):
         perms = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
         if not (interaction.user.id == ID_DONO_BOT or any(r.id in perms for r in interaction.user.roles)):
             return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
-        await interaction.response.defer()
+        
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+            
         self.staff_id = interaction.user.id
         if self.tipo == "suporte":
             c = interaction.guild.get_role(ID_CARGO_SUPORTE)
@@ -100,8 +104,13 @@ class ReivindicarView(discord.ui.View):
     @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="btn_unclaim_perma")
     async def unclaim(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not (self.staff_id == interaction.user.id or interaction.user.id == ID_DONO_BOT or any(r.id in IDS_IMUNES_BLOQUEIO for r in interaction.user.roles)):
-            return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
-        await interaction.response.defer()
+            if not interaction.response.is_done():
+                return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+            return
+
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         self.staff_id = None
         if self.tipo == "suporte":
             c = interaction.guild.get_role(ID_CARGO_SUPORTE)
@@ -160,7 +169,8 @@ class TicketView(discord.ui.View):
     async def den(self, interaction: discord.Interaction, b: discord.ui.Button):
         await self.ct(interaction, "denuncia", ID_CARGO_SUPERVISOR, IDS_ALTA_STAFF)
     async def ct(self, interaction, t, cp, iv):
-        await interaction.response.defer(ephemeral=True)
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         n = f"{t}-{interaction.user.name}".lower()
         ow = {interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False), interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True), interaction.guild.me: discord.PermissionOverwrite(view_channel=True, manage_channels=True)}
         for cid in iv:
@@ -186,16 +196,17 @@ class ticket(commands.Cog):
         m = d["soma"]/d["av_count"] if d["av_count"] > 0 else 0
         e = discord.Embed(title=f"Estatísticas de @{membro.name}", color=COR_PLATFORM)
         e.set_thumbnail(url=membro.display_avatar.url)
-        e.add_field(name="🎫 Tickets Totais", value=str(d["total"]), inline=False)
-        e.add_field(name="🕒 Tickets Hoje", value=str(d["hoje"]), inline=False)
-        e.add_field(name="⭐ Avaliações", value=str(d["av_count"]), inline=False)
-        e.add_field(name="🎓 Média", value=f"{m:.2f}/5", inline=False)
+        e.add_field(name="Tickets Totais", value=str(d["total"]), inline=False)
+        e.add_field(name=" Tickets Hoje", value=str(d["hoje"]), inline=False)
+        e.add_field(name=" Avaliações", value=str(d["av_count"]), inline=False)
+        e.add_field(name=" Média", value=f"{m:.2f}/5", inline=False)
         await interaction.response.send_message(embed=e)
 
 async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
