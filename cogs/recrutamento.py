@@ -108,10 +108,10 @@ class recrutamento(commands.Cog):
     @pode_postar()
     async def postar_recrutamento(self, ctx):
         """Posta a mensagem oficial de recrutamento"""
-        embed = discord.Embed(title="🚀 RECRUTAMENTO | PLATFORM DESTROYER", color=COR_AZUL)
+       embed = discord.Embed(title="<:PD:1384574150080729228> RECRUTAMENTO | PLATFORM DESTROYER", color=COR_AZUL)
         embed.description = (
             "**Deseja fazer parte da nossa staff de moderação?**\n\n"
-            "### 📋 Requisitos Básicos:\n"
+            "### <:PD:1384574150080729228> Requisitos Básicos:\n"
             "• Ter maturidade e ser ativo no servidor.\n"
             "• Conhecer profundamente as regras.\n\n"
             "**Clique no botão abaixo para preencher seu formulário!**"
@@ -125,4 +125,5 @@ class recrutamento(commands.Cog):
 async def setup(bot):
     bot.add_view(BotaoAbrirRecrutamento()) 
     await bot.add_cog(recrutamento(bot))
+
 
