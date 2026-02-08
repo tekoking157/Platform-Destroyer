@@ -72,6 +72,7 @@ class ComentarioModal(discord.ui.Modal, title="Avaliação do Atendimento"):
         self.user_id = user_id
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         registrar_stats_local(self.staff_id, self.nota)
         
         log_av = interaction.guild.get_channel(ID_CANAL_AVALIACOES)
@@ -90,7 +91,7 @@ class ComentarioModal(discord.ui.Modal, title="Avaliação do Atendimento"):
             
             await log_av.send(embed=embed, view=view)
 
-        await interaction.response.send_message(f"✅ Obrigado por avaliar o atendimento de <@{self.staff_id}>", ephemeral=True)
+        await interaction.followup.send(f"✅ Obrigado por avaliar o atendimento de <@{self.staff_id}>", ephemeral=True)
 
 class AvaliacaoDMView(discord.ui.View):
     def __init__(self, staff_id, channel_name, channel_id, user_id):
@@ -123,15 +124,14 @@ class ReivindicarView(discord.ui.View):
 
     @discord.ui.button(label="Reivindicar", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_claim_perma")
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        
         ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
         pode_reivindicar = interaction.user.id == ID_DONO_BOT or any(role.id in ids_permitidos for role in interaction.user.roles)
 
         if not pode_reivindicar:
-            return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+            return await interaction.followup.send("❌ Sem permissão.", ephemeral=True)
 
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-            
         self.staff_id = interaction.user.id
         
         if self.tipo == "suporte":
@@ -165,18 +165,15 @@ class ReivindicarView(discord.ui.View):
 
     @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="btn_unclaim_perma")
     async def unclaim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        
         pode_unclaim = (self.staff_id and interaction.user.id == self.staff_id) or \
                        interaction.user.id == ID_DONO_BOT or \
                        any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
 
         if not pode_unclaim:
-            if not interaction.response.is_done():
-                return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
-            return
+            return await interaction.followup.send("❌ Sem permissão.", ephemeral=True)
 
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-            
         self.staff_id = None
 
         if self.tipo == "suporte":
@@ -264,8 +261,7 @@ class TicketView(discord.ui.View):
         await self.criar_ticket(interaction, "denuncia", ID_CARGO_SUPERVISOR, IDS_ALTA_STAFF)
 
     async def criar_ticket(self, interaction, tipo, cargo_ping_id, ids_visualizacao):
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         categoria = guild.get_channel(ID_CATEGORIA_TICKETS)
         nome_canal = f"{tipo}-{interaction.user.name}".lower().replace(" ", "-")
@@ -372,6 +368,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
