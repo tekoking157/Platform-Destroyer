@@ -20,7 +20,7 @@ ID_CARGO_ADM = 1357569800947236998
 ID_CARGO_CM = 1414283694662750268
 ID_CARGO_MANAGER = 1357569800947237000
 
-# Cargos que NUNCA perdem a permissão de falar (Alta Hierarquia)
+# Cargos que NUNCA perdem a permissão de falar (Acesso Total)
 IDS_IMUNES_BLOQUEIO = [ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER, ID_CARGO_SETUP]
 
 IDS_ALTA_STAFF = [ID_CARGO_HMOD, ID_CARGO_SUPERVISOR, ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER]
@@ -53,14 +53,26 @@ class ReivindicarView(discord.ui.View):
         await interaction.response.defer()
         self.staff_id = interaction.user.id
         
-        # Bloqueia apenas cargos que não são imunes (Suporte, Supervisor, HMOD)
-        for id_cargo in ids_permitidos:
-            if id_cargo not in IDS_IMUNES_BLOQUEIO:
-                cargo = interaction.guild.get_role(id_cargo)
-                if cargo:
-                    await interaction.channel.set_permissions(cargo, view_channel=True, send_messages=False)
+        # 1. Bloqueio de fala para cargos de suporte/denúncia (apenas visualização)
+        if self.tipo == "suporte":
+            cargo_suporte = interaction.guild.get_role(ID_CARGO_SUPORTE)
+            if cargo_suporte:
+                await interaction.channel.set_permissions(cargo_suporte, view_channel=True, send_messages=False)
+        else:
+            cargo_sup = interaction.guild.get_role(ID_CARGO_SUPERVISOR)
+            cargo_hmod = interaction.guild.get_role(ID_CARGO_HMOD)
+            if cargo_sup:
+                await interaction.channel.set_permissions(cargo_sup, view_channel=True, send_messages=False)
+            if cargo_hmod:
+                await interaction.channel.set_permissions(cargo_hmod, view_channel=True, send_messages=False)
 
-        # Garante que o Staff que reivindicou tenha permissão total
+        # 2. Garante acesso total para altas hierarquias
+        for id_imune in IDS_IMUNES_BLOQUEIO:
+            cargo_imune = interaction.guild.get_role(id_imune)
+            if cargo_imune:
+                await interaction.channel.set_permissions(cargo_imune, view_channel=True, send_messages=True, attach_files=True)
+
+        # 3. Garante que quem reivindicou tenha permissão total
         await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
         
         asyncio.create_task(registrar_ticket_site({
@@ -73,17 +85,49 @@ class ReivindicarView(discord.ui.View):
         await interaction.edit_original_response(view=self)
         await interaction.channel.send(f"🛡️ Atendimento iniciado por {interaction.user.mention}")
 
+    @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="btn_unclaim_perma")
+    async def unclaim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pode_unclaim = (self.staff_id and interaction.user.id == self.staff_id) or \
+                       interaction.user.id == ID_DONO_BOT or \
+                       any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
+
+        if not pode_unclaim:
+            return await interaction.response.send_message("❌ Você não pode retirar a reivindicação de outra pessoa.", ephemeral=True)
+
+        await interaction.response.defer()
+        self.staff_id = None
+
+        # Devolve a permissão de fala para os cargos originais
+        if self.tipo == "suporte":
+            cargo_suporte = interaction.guild.get_role(ID_CARGO_SUPORTE)
+            if cargo_suporte:
+                await interaction.channel.set_permissions(cargo_suporte, view_channel=True, send_messages=True)
+        else:
+            cargo_sup = interaction.guild.get_role(ID_CARGO_SUPERVISOR)
+            cargo_hmod = interaction.guild.get_role(ID_CARGO_HMOD)
+            if cargo_sup:
+                await interaction.channel.set_permissions(cargo_sup, view_channel=True, send_messages=True)
+            if cargo_hmod:
+                await interaction.channel.set_permissions(cargo_hmod, view_channel=True, send_messages=True)
+
+        # Reativa o botão de Reivindicar na view
+        for item in self.children:
+            if item.custom_id == "btn_claim_perma":
+                item.disabled = False
+                item.label = "Reivindicar"
+        
+        await interaction.edit_original_response(view=self)
+        await interaction.channel.send("🔄 A reivindicação foi retirada. A equipe agora pode interagir novamente.")
+
     @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
     async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ids_permitidos = IDS_PERMITIDOS_SUPORTE if self.tipo == "suporte" else IDS_ALTA_STAFF
         pode_fechar = (self.staff_id and interaction.user.id == self.staff_id) or \
                       interaction.user.id == ID_DONO_BOT or \
-                      any(role.id in ids_permitidos for role in interaction.user.roles)
+                      any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
 
         if not pode_fechar:
             return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
 
-        # Resposta visível para confirmar o início do processo
         await interaction.response.send_message("🔒 Fechando canal e processando logs...")
 
         data_abertura = "N/A"
@@ -94,14 +138,12 @@ class ReivindicarView(discord.ui.View):
         autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
         reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
 
-        # Coleta as mensagens para o log ANTES de apagar
         mensagens = []
         async for msg in interaction.channel.history(limit=None, oldest_first=True):
             time_str = msg.created_at.strftime('%d/%m %H:%M')
             mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
         buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
 
-        # Envio do Log
         log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
         if log_canal:
             embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
@@ -116,11 +158,9 @@ class ReivindicarView(discord.ui.View):
             file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
             await log_canal.send(embed=embed_log, file=file)
 
-        # Registros Finais
         await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
         await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
 
-        # Deletar o canal após tudo concluído
         await asyncio.sleep(2)
         await interaction.channel.delete()
 
