@@ -171,7 +171,7 @@ class ReivindicarView(discord.ui.View):
         if not pode_fechar:
             return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
 
-        await interaction.response.send_message("🔒 Fechando canal...")
+        await interaction.response.send_message("🔒 Fechando canal e enviando avaliação para a DM")
 
         data_abertura = "N/A"
         if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
@@ -235,7 +235,7 @@ class TicketView(discord.ui.View):
         
         existente = discord.utils.get(guild.channels, name=nome_canal)
         if existente:
-            return await interaction.followup.send(f"Você já tem um ticket em {existente.mention}?", ephemeral=True)
+            return await interaction.followup.send(f"Você já tem um ticket em {existente.mention}", ephemeral=True)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -269,7 +269,7 @@ class TicketView(discord.ui.View):
         embed.set_image(url=BANNER_URL)
         
         await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo))
-        await interaction.followup.send(f"Ticket criado: {canal.mention}?", ephemeral=True)
+        await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
 
 class ticket(commands.Cog):
     def __init__(self, bot):
@@ -279,7 +279,7 @@ class ticket(commands.Cog):
     async def setup_ticket(self, ctx):
         tem_permissao = ctx.author.id == ID_DONO_BOT or any(role.id == ID_CARGO_SETUP for role in ctx.author.roles)
         if not tem_permissao:
-            return await ctx.send("❌ Sem permissão?", ephemeral=True)
+            return await ctx.send("❌ Sem permissão.", ephemeral=True)
 
         embed = discord.Embed(
             title="Platform Destroyer | Tickets",
@@ -301,6 +301,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
