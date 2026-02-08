@@ -33,14 +33,12 @@ class PlatformDestroyer(commands.Bot):
                 except Exception as e:
                     print(f'Erro: {e}')
         
-        try:
-            synced = await self.tree.sync()
-            self.quantidade_slash = len(synced)
-        except Exception as e:
-            print(f'Erro Sync: {e}')
+        await self.tree.sync()
 
     async def on_ready(self):
         print(f"Bot {self.user.name} online")
+        synced = await self.tree.sync()
+        self.quantidade_slash = len(synced)
         await self.change_presence(activity=discord.Game(name="Platform Destroyer 2026"))
 
     async def on_message(self, message):
@@ -79,6 +77,14 @@ async def manutencao(ctx, status: str):
         
     await ctx.send(f"Modo manutenção {msg}.")
 
+@bot.command(name="sync")
+async def sync(ctx):
+    if ctx.author.id != MEU_ID:
+        return await ctx.send("❌ Negado.")
+    
+    fmt = await bot.tree.sync()
+    await ctx.send(f"Sincronizados {len(fmt)} comandos slash.")
+
 @bot.command(name="reload")
 async def reload(ctx, extension: str):
     if ctx.author.id != MEU_ID:
@@ -86,7 +92,8 @@ async def reload(ctx, extension: str):
 
     try:
         await bot.reload_extension(f"cogs.{extension}")
-        await ctx.send(f"✅ O módulo `{extension}` foi reiniciado com sucesso!")
+        await bot.tree.sync()
+        await ctx.send(f"✅ O módulo `{extension}` foi reiniciado e sincronizado!")
     except Exception as e:
         await ctx.send(f"❌ Erro ao reiniciar o módulo `{extension}`: {e}")
 
