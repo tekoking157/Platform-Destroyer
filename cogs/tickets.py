@@ -20,6 +20,9 @@ ID_CARGO_ADM = 1357569800947236998
 ID_CARGO_CM = 1414283694662750268
 ID_CARGO_MANAGER = 1357569800947237000
 
+# Cargos que NUNCA perdem a permissão de falar (Alta Hierarquia)
+IDS_IMUNES_BLOQUEIO = [ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER, ID_CARGO_SETUP]
+
 IDS_ALTA_STAFF = [ID_CARGO_HMOD, ID_CARGO_SUPERVISOR, ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER]
 IDS_PERMITIDOS_SUPORTE = [ID_CARGO_SUPORTE, ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER]
 
@@ -50,11 +53,12 @@ class ReivindicarView(discord.ui.View):
         await interaction.response.defer()
         self.staff_id = interaction.user.id
         
-        # Remove permissão de enviar mensagens dos cargos de Staff, mas mantém a visão
+        # Bloqueia apenas cargos que não são imunes (Suporte, Supervisor, HMOD)
         for id_cargo in ids_permitidos:
-            cargo = interaction.guild.get_role(id_cargo)
-            if cargo:
-                await interaction.channel.set_permissions(cargo, view_channel=True, send_messages=False)
+            if id_cargo not in IDS_IMUNES_BLOQUEIO:
+                cargo = interaction.guild.get_role(id_cargo)
+                if cargo:
+                    await interaction.channel.set_permissions(cargo, view_channel=True, send_messages=False)
 
         # Garante que o Staff que reivindicou tenha permissão total
         await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
@@ -79,7 +83,8 @@ class ReivindicarView(discord.ui.View):
         if not pode_fechar:
             return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
 
-        await interaction.response.send_message("🔒 Fechando canal e enviando logs...")
+        # Resposta visível para confirmar o início do processo
+        await interaction.response.send_message("🔒 Fechando canal e processando logs...")
 
         data_abertura = "N/A"
         if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
@@ -89,13 +94,14 @@ class ReivindicarView(discord.ui.View):
         autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
         reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
 
-        # Gerar log
+        # Coleta as mensagens para o log ANTES de apagar
         mensagens = []
         async for msg in interaction.channel.history(limit=None, oldest_first=True):
             time_str = msg.created_at.strftime('%d/%m %H:%M')
             mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
         buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
 
+        # Envio do Log
         log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
         if log_canal:
             embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
@@ -105,14 +111,16 @@ class ReivindicarView(discord.ui.View):
             embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
             embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
             embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
-            embed_log.add_field(name="Motivo", value="No Reason Provided", inline=False)
+            embed_log.add_field(name="Motivo para fechar o Ticket", value="No Reason Provided", inline=False)
             
             file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
             await log_canal.send(embed=embed_log, file=file)
 
+        # Registros Finais
         await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
         await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
 
+        # Deletar o canal após tudo concluído
         await asyncio.sleep(2)
         await interaction.channel.delete()
 
@@ -202,6 +210,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
