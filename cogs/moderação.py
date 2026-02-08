@@ -29,7 +29,7 @@ class moderacao(commands.Cog):
             return await ctx.send(f"❌ Erro de Hierarquia: O cargo {cargo.name} está acima do meu cargo mais alto.")
 
         if cargo in membro.roles:
-            return await ctx.send(f"❌ {membro.mention} já possui o cargo {cargo.mention}?")
+            return await ctx.send(f"❌ {membro.mention} já possui o cargo {cargo.mention}")
 
         try:
             await membro.add_roles(cargo, reason=f"Promovido por {ctx.author}")
@@ -66,7 +66,7 @@ class moderacao(commands.Cog):
                     allowed_mentions=discord.AllowedMentions(roles=False)
                 )
             else:
-                await ctx.send(f"❌ {membro.mention} não possui o cargo {cargo.mention}?")
+                await ctx.send(f"❌ {membro.mention} não possui o cargo {cargo.mention}")
         except discord.Forbidden:
             await ctx.send("❌ Falha na permissão: Arraste meu cargo para o topo da hierarquia.")
         except Exception as e:
@@ -74,6 +74,7 @@ class moderacao(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(moderacao(bot))
+
 
 
 
