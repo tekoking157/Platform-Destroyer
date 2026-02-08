@@ -56,7 +56,7 @@ class PunicaoView(ui.View):
             if "ban" in self.acao:
                 await guild.unban(membro)
                 msg = f"✅ Banimento de {membro.name} removido."
-            elif "mute" in self.acao or "nuclear" in self.acao:
+            elif any(x in self.acao for x in ["mute", "nuclear"]):
                 if isinstance(membro, discord.Member):
                     await membro.timeout(None)
                     cargo = guild.get_role(self.cog.ID_CARGO_MUTADO)
@@ -140,7 +140,7 @@ class punicoes(commands.Cog):
         embed.set_thumbnail(url=membro.display_avatar.url)
         embed.add_field(name="| usuário", value=f"{membro.mention}\n`{membro.id}`", inline=False)
         embed.add_field(name="| moderador", value=f"{ctx.author.mention}\n`{ctx.author.id}`", inline=False)
-        if "muta" in acao.lower() or "nuclear" in acao.lower(): embed.add_field(name="| duração", value=duracao, inline=False)
+        if any(x in acao.lower() for x in ["muta", "nuclear"]): embed.add_field(name="| duração", value=duracao, inline=False)
         embed.add_field(name="| motivo", value=motivo, inline=False)
         embed.set_footer(text=f"ID do Alvo: {membro.id}")
         
@@ -156,7 +156,7 @@ class punicoes(commands.Cog):
             return await ctx.send("❌ Você não tem autoridade para usar a Bomba Nuclear.", ephemeral=True)
             
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Quem você deseja expurgar?")
+        if not membro: return await ctx.send("❓ Quem você deseja expurgar!")
         if not await self.checar_hierarquia(ctx, membro): return
         
         motivo = "Expurgado via Nuclear Bomb"
@@ -164,10 +164,8 @@ class punicoes(commands.Cog):
         try:
             await membro.edit(roles=[])
             await membro.timeout(datetime.timedelta(minutes=15), reason=motivo)
-            
             await self.avisar_usuario(membro, "NUCLEAR BOMB", motivo, ctx.guild.name)
             await self.enviar_log(ctx, membro, "NUCLEAR BOMB", motivo, discord.Color.dark_red(), "15 minutos")
-            
             await ctx.send(f"{membro.mention} foi expurgado.")
         except Exception as e:
             await ctx.send(f"❌ Falha na sequência: {e}")
@@ -217,7 +215,7 @@ class punicoes(commands.Cog):
     async def modlogs(self, ctx, usuario: discord.User):
         await ctx.defer()
         canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
-        if not canal_logs: return await ctx.send("? Canal de logs não encontrado.")
+        if not canal_logs: return await ctx.send("❓ Canal de logs não encontrado.")
         
         punicoes_encontradas = []
         user_id_str = str(usuario.id)
@@ -258,7 +256,7 @@ class punicoes(commands.Cog):
                 ts = int(p["data"].timestamp())
                 txt = f"**Tipo:** {p['tipo']}\n**Moderador:** {p['moderador']}\n**Data:** <t:{ts}:d>\n**Motivo:** {p['motivo']}"
                 emb.add_field(name="──────────────", value=txt, inline=False)
-            emb.set_footer(text=f"? Página {len(paginas)+1} | Total: {len(punicoes_encontradas)}")
+            emb.set_footer(text=f"❓ Página {len(paginas)+1} | Total: {len(punicoes_encontradas)}")
             paginas.append(emb)
 
         view = ModlogsPagination(paginas) if len(paginas) > 1 else None
@@ -353,18 +351,6 @@ class punicoes(commands.Cog):
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
         await ctx.send(f"✅ {membro.mention} banido.")
-
-    @commands.hybrid_command(name="ipban", description="Bane IP e limpa mensagens")
-    @check_staff()
-    @check_pode_banir()
-    async def ipban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
-        membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
-        if not await self.checar_hierarquia(ctx, membro): return
-        await self.avisar_usuario(membro, "IP BAN", motivo, ctx.guild.name)
-        await self.enviar_log(ctx, membro, "IP BAN (7D)", motivo, discord.Color.dark_red())
-        await membro.ban(reason=f"IP BAN: {motivo}", delete_message_days=7)
-        await ctx.send(f"🚫 {membro.mention} banido por IP.")
 
     @commands.hybrid_command(name="unban", description="Desbane pelo ID")
     @check_staff()
