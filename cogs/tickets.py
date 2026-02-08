@@ -276,14 +276,14 @@ class TicketView(discord.ui.View):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, read_message_history=True),
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
         for id_cargo in ids_visualizacao:
             cargo = guild.get_role(id_cargo)
             if cargo:
-                overwrites[cargo] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+                overwrites[cargo] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
 
         canal = await guild.create_text_channel(
             name=nome_canal, 
