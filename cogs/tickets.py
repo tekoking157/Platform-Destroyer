@@ -4,15 +4,15 @@ import asyncio
 import datetime
 import io
 import aiohttp
+import json
+import os
 
 COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
 BANNER_URL = "https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif"
 ID_CATEGORIA_TICKETS = 1357569803778392269
 ID_CANAL_LOG_TICKETS = 1392528999623692460 
-
 ID_DONO_BOT = 1304003843172077659
 ID_CARGO_SETUP = 1357569800947237000
-
 ID_CARGO_SUPORTE = 1357569800938721349
 ID_CARGO_HMOD = 1431475496377389177
 ID_CARGO_SUPERVISOR = 1414283452878028800
@@ -21,11 +21,34 @@ ID_CARGO_CM = 1414283694662750268
 ID_CARGO_MANAGER = 1357569800947237000
 
 IDS_IMUNES_BLOQUEIO = [ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER, ID_CARGO_SETUP]
-
 IDS_ALTA_STAFF = [ID_CARGO_HMOD, ID_CARGO_SUPERVISOR, ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER]
 IDS_PERMITIDOS_SUPORTE = [ID_CARGO_SUPORTE, ID_CARGO_ADM, ID_CARGO_CM, ID_CARGO_MANAGER]
 
 TICKET_ENDPOINT = "https://otzrrxefahqeovfbonag.supabase.co/functions/v1/register-ticket"
+STATS_FILE = "stats.json"
+
+def carregar_stats():
+    if not os.path.exists(STATS_FILE): return {}
+    with open(STATS_FILE, "r") as f: return json.load(f)
+
+def salvar_stats(data):
+    with open(STATS_FILE, "w") as f: json.dump(data, f, indent=4)
+
+def registrar_stats_local(staff_id, nota=None):
+    data = carregar_stats()
+    sid = str(staff_id)
+    hoje = datetime.datetime.now().strftime("%Y-%m-%d")
+    if sid not in data:
+        data[sid] = {"total": 0, "hoje": 0, "av_count": 0, "soma": 0, "data": hoje}
+    if data[sid]["data"] != hoje:
+        data[sid]["hoje"] = 0
+        data[sid]["data"] = hoje
+    data[sid]["total"] += 1
+    data[sid]["hoje"] += 1
+    if nota:
+        data[sid]["av_count"] += 1
+        data[sid]["soma"] += int(nota)
+    salvar_stats(data)
 
 async def registrar_ticket_site(payload):
     try:
@@ -33,6 +56,26 @@ async def registrar_ticket_site(payload):
             async with session.post(TICKET_ENDPOINT, json=payload, timeout=5) as response:
                 return response.status
     except: return None
+
+class AvaliacaoDMView(discord.ui.View):
+    def __init__(self, staff_id):
+        super().__init__(timeout=86400)
+        self.staff_id = staff_id
+
+    @discord.ui.select(
+        placeholder="Escolha uma nota de 1 a 5",
+        options=[
+            discord.SelectOption(label="⭐", value="1"),
+            discord.SelectOption(label="⭐⭐", value="2"),
+            discord.SelectOption(label="⭐⭐⭐", value="3"),
+            discord.SelectOption(label="⭐⭐⭐⭐", value="4"),
+            discord.SelectOption(label="⭐⭐⭐⭐⭐", value="5"),
+        ]
+    )
+    async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
+        registrar_stats_local(self.staff_id, select.values[0])
+        await interaction.response.send_message(f"✅ Obrigado por avaliar o atendimento de <@{self.staff_id}>")
+        self.stop()
 
 class ReivindicarView(discord.ui.View):
     def __init__(self, usuario_id=None, tipo=None, staff_id=None):
@@ -47,13 +90,11 @@ class ReivindicarView(discord.ui.View):
         pode_reivindicar = interaction.user.id == ID_DONO_BOT or any(role.id in ids_permitidos for role in interaction.user.roles)
 
         if not pode_reivindicar:
-            return await interaction.response.send_message("❌ Você não tem permissão para reivindicar este ticket.", ephemeral=True)
+            return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
 
-        try:
+        if not interaction.response.is_done():
             await interaction.response.defer()
-        except discord.errors.InteractionResponded:
-            pass
-
+            
         self.staff_id = interaction.user.id
         
         if self.tipo == "suporte":
@@ -83,7 +124,7 @@ class ReivindicarView(discord.ui.View):
         button.disabled = True
         button.label = "Reivindicado"
         await interaction.edit_original_response(view=self)
-        await interaction.channel.send(f"🛡️ Atendimento iniciado por {interaction.user.mention}")
+        await interaction.channel.send(f"🛡️ Atendimento iniciado por <@{interaction.user.id}>")
 
     @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="btn_unclaim_perma")
     async def unclaim(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -92,13 +133,13 @@ class ReivindicarView(discord.ui.View):
                        any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
 
         if not pode_unclaim:
-            return await interaction.response.send_message("❌ Você não pode retirar a reivindicação de outra pessoa.", ephemeral=True)
+            if not interaction.response.is_done():
+                return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+            return
 
-        try:
+        if not interaction.response.is_done():
             await interaction.response.defer()
-        except discord.errors.InteractionResponded:
-            pass
-
+            
         self.staff_id = None
 
         if self.tipo == "suporte":
@@ -119,7 +160,7 @@ class ReivindicarView(discord.ui.View):
                 item.label = "Reivindicar"
         
         await interaction.edit_original_response(view=self)
-        await interaction.channel.send("🔄 A reivindicação foi retirada. A equipe agora pode interagir novamente.")
+        await interaction.channel.send("🔄 A equipe agora pode interagir novamente")
 
     @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
     async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -128,9 +169,9 @@ class ReivindicarView(discord.ui.View):
                       any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
 
         if not pode_fechar:
-            return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
+            return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
 
-        await interaction.response.send_message("🔒 Fechando canal e processando logs...")
+        await interaction.response.send_message("🔒 Fechando canal...")
 
         data_abertura = "N/A"
         if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
@@ -151,15 +192,22 @@ class ReivindicarView(discord.ui.View):
             embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
             embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
             embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
-            embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
+            embed_log.add_field(name="Fechado por", value=f"<@{interaction.user.id}>", inline=True)
             embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
             embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
             embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
-            embed_log.add_field(name="Motivo para fechar o Ticket", value="No Reason Provided", inline=False)
             
             file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
             await log_canal.send(embed=embed_log, file=file)
 
+        if self.usuario_id and self.staff_id:
+            try:
+                user = await interaction.client.fetch_user(self.usuario_id)
+                e_dm = discord.Embed(title="Avalie nosso atendimento", description=f"Seu ticket em **{interaction.guild.name}** foi finalizado por <@{self.staff_id}>.\nComo você avalia o suporte recebido?", color=COR_PLATFORM)
+                await user.send(embed=e_dm, view=AvaliacaoDMView(self.staff_id))
+            except: pass
+
+        registrar_stats_local(self.staff_id)
         await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
         await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
 
@@ -179,18 +227,15 @@ class TicketView(discord.ui.View):
         await self.criar_ticket(interaction, "denuncia", ID_CARGO_SUPERVISOR, IDS_ALTA_STAFF)
 
     async def criar_ticket(self, interaction, tipo, cargo_ping_id, ids_visualizacao):
-        try:
+        if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
-        except discord.errors.InteractionResponded:
-            pass
-
         guild = interaction.guild
         categoria = guild.get_channel(ID_CATEGORIA_TICKETS)
         nome_canal = f"{tipo}-{interaction.user.name}".lower().replace(" ", "-")
         
         existente = discord.utils.get(guild.channels, name=nome_canal)
         if existente:
-            return await interaction.followup.send(f"Você já tem um ticket em {existente.mention}.", ephemeral=True)
+            return await interaction.followup.send(f"Você já tem um ticket em {existente.mention}?", ephemeral=True)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -218,13 +263,13 @@ class TicketView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"Atendimento - {tipo.upper()}", 
-            description=f"Olá {interaction.user.mention},\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
+            description=f"Olá <@{interaction.user.id}>,\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
             color=COR_PLATFORM
         )
         embed.set_image(url=BANNER_URL)
         
         await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo))
-        await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
+        await interaction.followup.send(f"Ticket criado: {canal.mention}?", ephemeral=True)
 
 class ticket(commands.Cog):
     def __init__(self, bot):
@@ -234,7 +279,7 @@ class ticket(commands.Cog):
     async def setup_ticket(self, ctx):
         tem_permissao = ctx.author.id == ID_DONO_BOT or any(role.id == ID_CARGO_SETUP for role in ctx.author.roles)
         if not tem_permissao:
-            return await ctx.send("❌ Você não tem permissão.", ephemeral=True)
+            return await ctx.send("❌ Sem permissão?", ephemeral=True)
 
         embed = discord.Embed(
             title="Platform Destroyer | Tickets",
@@ -256,6 +301,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
