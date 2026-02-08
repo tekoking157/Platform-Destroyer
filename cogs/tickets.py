@@ -49,6 +49,14 @@ class ReivindicarView(discord.ui.View):
 
         await interaction.response.defer()
         self.staff_id = interaction.user.id
+        
+        # Remove permissão de enviar mensagens dos cargos de Staff, mas mantém a visão
+        for id_cargo in ids_permitidos:
+            cargo = interaction.guild.get_role(id_cargo)
+            if cargo:
+                await interaction.channel.set_permissions(cargo, view_channel=True, send_messages=False)
+
+        # Garante que o Staff que reivindicou tenha permissão total
         await interaction.channel.set_permissions(interaction.user, view_channel=True, send_messages=True, attach_files=True)
         
         asyncio.create_task(registrar_ticket_site({
@@ -71,10 +79,8 @@ class ReivindicarView(discord.ui.View):
         if not pode_fechar:
             return await interaction.response.send_message("❌ Você não tem permissão para fechar este ticket.", ephemeral=True)
 
-        # Resposta imediata para evitar timeout
-        await interaction.response.send_message("🔒 Fechando canal...")
+        await interaction.response.send_message("🔒 Fechando canal e enviando logs...")
 
-        # Coleta de dados para o log antes de apagar
         data_abertura = "N/A"
         if interaction.channel.topic and "Aberto: " in interaction.channel.topic:
             data_abertura = interaction.channel.topic.split("Aberto: ")[1]
@@ -83,36 +89,31 @@ class ReivindicarView(discord.ui.View):
         autor_ticket = f"<@{self.usuario_id}>" if self.usuario_id else "Desconhecido"
         reivindicado_por = f"<@{self.staff_id}>" if self.staff_id else "Ninguém"
 
-        # Gerar log em memória
+        # Gerar log
         mensagens = []
         async for msg in interaction.channel.history(limit=None, oldest_first=True):
             time_str = msg.created_at.strftime('%d/%m %H:%M')
             mensagens.append(f"[{time_str}] {msg.author}: {msg.content}")
         buffer = io.BytesIO("\n".join(mensagens).encode("utf-8"))
 
-        # Enviar logs em segundo plano para não travar a deleção
-        async def processar_encerramento():
-            log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
-            if log_canal:
-                embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
-                embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
-                embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
-                embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
-                embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
-                embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
-                embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
-                embed_log.add_field(name="Motivo", value="No Reason Provided", inline=False)
-                
-                file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
-                await log_canal.send(embed=embed_log, file=file)
+        log_canal = interaction.guild.get_channel(ID_CANAL_LOG_TICKETS)
+        if log_canal:
+            embed_log = discord.Embed(title="Ticket Fechado", color=COR_PLATFORM)
+            embed_log.add_field(name="Nome do Ticket", value=f"`{interaction.channel.name}`", inline=True)
+            embed_log.add_field(name="Autor do Ticket", value=autor_ticket, inline=True)
+            embed_log.add_field(name="Fechado por", value=interaction.user.mention, inline=True)
+            embed_log.add_field(name="Claimed By", value=reivindicado_por, inline=True)
+            embed_log.add_field(name="Data de Abertura", value=data_abertura, inline=True)
+            embed_log.add_field(name="Data de encerramento", value=data_fechamento, inline=True)
+            embed_log.add_field(name="Motivo", value="No Reason Provided", inline=False)
+            
+            file = discord.File(fp=buffer, filename=f"log-{interaction.channel.name}.txt")
+            await log_canal.send(embed=embed_log, file=file)
 
-            await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
-            await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
+        await registrar_ticket_site({"action": "resolve", "discord_channel_id": str(interaction.channel.id)})
+        await registrar_ticket_site({"action": "close", "discord_channel_id": str(interaction.channel.id)})
 
-        asyncio.create_task(processar_encerramento())
-
-        # Deletar o canal AGORA
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
         await interaction.channel.delete()
 
 class TicketView(discord.ui.View):
@@ -163,7 +164,7 @@ class TicketView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"Atendimento - {tipo.upper()}", 
-            description=f"Olá {interaction.user.mention}\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
+            description=f"Olá {interaction.user.mention},\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
             color=COR_PLATFORM
         )
         embed.set_image(url=BANNER_URL)
@@ -201,7 +202,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
-    
+
 
 
 
