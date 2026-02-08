@@ -55,7 +55,6 @@ class seguranca(commands.Cog):
     @commands.hybrid_command(name="antiinvite", description="Liga/Desliga bloqueio de convites")
     @check_seguranca()
     async def antiinvite(self, ctx, status: str):
-        """Uso: ?antiinvite on/off"""
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_invite_ativo[ctx.guild.id] = (status == "on")
@@ -65,7 +64,6 @@ class seguranca(commands.Cog):
     @commands.hybrid_command(name="antispam", description="Liga/Desliga anti-flood de mensagens")
     @check_seguranca()
     async def antispam(self, ctx, status: str):
-        """Uso: ?antispam on/off"""
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_spam_ativo[ctx.guild.id] = (status == "on")
@@ -135,7 +133,7 @@ class seguranca(commands.Cog):
                     except: pass
                 break
 
-   @commands.Cog.listener()
+    @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if len(before.roles) < len(after.roles):
             if after.joined_at:
@@ -146,11 +144,8 @@ class seguranca(commands.Cog):
             await asyncio.sleep(1)
             async for entry in after.guild.audit_logs(action=discord.AuditLogAction.member_role_update, limit=1):
                 staff = entry.user
-                
-              
                 if staff.bot or staff.id in WHITELIST_USERS or staff.id == after.id: 
                     return
-                
                 if self.verificar_limite(staff, self.monitor_cargos, limite=3, tempo=60):
                     try:
                         if staff.top_role < after.guild.me.top_role:
@@ -161,6 +156,7 @@ class seguranca(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(seguranca(bot))
+
 
 
 
