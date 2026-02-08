@@ -53,7 +53,7 @@ class PunicaoView(ui.View):
         guild = interaction.guild
         try:
             membro = guild.get_member(self.membro_id) or await self.cog.bot.fetch_user(self.membro_id)
-            if "ban" in self.acao:
+            if any(x in self.acao for x in ["ban", "ipban"]):
                 await guild.unban(membro)
                 msg = f"✅ Banimento de {membro.name} removido."
             elif any(x in self.acao for x in ["mute", "nuclear"]):
@@ -180,7 +180,8 @@ class punicoes(commands.Cog):
         stats = {"WARN": {"hoje": 0, "semana": 0, "total": 0}, 
                  "MUTE": {"hoje": 0, "semana": 0, "total": 0}, 
                  "KICK": {"hoje": 0, "semana": 0, "total": 0}, 
-                 "BAN":  {"hoje": 0, "semana": 0, "total": 0}}
+                 "BAN":  {"hoje": 0, "semana": 0, "total": 0},
+                 "IPBAN": {"hoje": 0, "semana": 0, "total": 0}}
         
         total_acumulado = 0
         agora = datetime.datetime.now(datetime.timezone.utc)
@@ -293,7 +294,7 @@ class punicoes(commands.Cog):
     @check_staff()
     async def unmute(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         try:
             await membro.timeout(None)
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
@@ -307,7 +308,7 @@ class punicoes(commands.Cog):
     @check_staff()
     async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         if not await self.checar_hierarquia(ctx, membro): return
         self.warns_cache[membro.id] = self.warns_cache.get(membro.id, 0) + 1
         atual = self.warns_cache[membro.id]
@@ -324,7 +325,7 @@ class punicoes(commands.Cog):
     @check_staff()
     async def unwarn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         self.warns_cache[membro.id] = 0
         await self.enviar_log(ctx, membro, "unwarn", motivo, discord.Color.green())
         await ctx.send(f"✅ Avisos de {membro.mention} resetados.")
@@ -333,7 +334,7 @@ class punicoes(commands.Cog):
     @check_staff()
     async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         if not await self.checar_hierarquia(ctx, membro): return
         await self.avisar_usuario(membro, "kick", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
@@ -345,12 +346,24 @@ class punicoes(commands.Cog):
     @check_pode_banir()
     async def ban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
         if not await self.checar_hierarquia(ctx, membro): return
         await self.avisar_usuario(membro, "ban", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
         await ctx.send(f"✅ {membro.mention} banido.")
+
+    @commands.hybrid_command(name="ipban", description="Bane um membro e seu endereço IP")
+    @check_staff()
+    @check_pode_banir()
+    async def ipban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
+        membro = await self.identificar_alvo(ctx, membro)
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not await self.checar_hierarquia(ctx, membro): return
+        await self.avisar_usuario(membro, "ipban", motivo, ctx.guild.name)
+        await self.enviar_log(ctx, membro, "ipban", motivo, discord.Color.from_rgb(20, 20, 20))
+        await membro.ban(reason=f"IPBAN: {motivo}", delete_message_days=7)
+        await ctx.send(f"🚫 {membro.mention} foi banido por IP.")
 
     @commands.hybrid_command(name="unban", description="Desbane pelo ID")
     @check_staff()
