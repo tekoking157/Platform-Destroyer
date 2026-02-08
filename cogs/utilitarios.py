@@ -249,12 +249,13 @@ class utilitarios(commands.Cog):
             color=self.COR_PLATFORM
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_image(url="https://res.cloudinary.com/dv0xl7skh/image/upload/v1770493528/banner_exemplo.png")
+        embed.set_image(url="https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif?ex=698908c5&is=6987b745&hm=f664b5a8d1d5107caa632ad222fd571e7aa0fe33cec8bb08d61b937292f1412c&=&width=612&height=216")
         view = HelpView(self.bot, ["Ticket", "Jishaku", "Seguranca"])
         await ctx.send(embed=embed, view=view)
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
