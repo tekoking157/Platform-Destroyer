@@ -115,10 +115,10 @@ class punicoes(commands.Cog):
         if ctx.author.id == ctx.guild.owner_id: return True
         if membro.id == self.bot.user.id: return False
         if membro.top_role >= ctx.author.top_role and ctx.author.id != ctx.guild.owner_id:
-            await ctx.send(f"❌ Você não pode punir {membro.mention} (cargo igual ou superior).")
+            await ctx.send(f"❌ Você não pode punir {membro.mention} (cargo igual ou superior).", delete_after=15)
             return False
         if membro.top_role >= ctx.guild.me.top_role:
-            await ctx.send(f"❌ Eu não posso punir {membro.mention} (cargo superior ao meu).")
+            await ctx.send(f"❌ Eu não posso punir {membro.mention} (cargo superior ao meu).", delete_after=15)
             return False
         return True
 
@@ -156,7 +156,7 @@ class punicoes(commands.Cog):
             return await ctx.send("❌ Você não tem autoridade para usar a Bomba Nuclear.", ephemeral=True)
             
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Quem você deseja expurgar!")
+        if not membro: return await ctx.send("❓ Quem você deseja expurgar!", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         
         motivo = "Expurgado via Nuclear Bomb"
@@ -166,9 +166,9 @@ class punicoes(commands.Cog):
             await membro.timeout(datetime.timedelta(minutes=15), reason=motivo)
             await self.avisar_usuario(membro, "NUCLEAR BOMB", motivo, ctx.guild.name)
             await self.enviar_log(ctx, membro, "NUCLEAR BOMB", motivo, discord.Color.dark_red(), "15 minutos")
-            await ctx.send(f"{membro.mention} foi expurgado.")
+            await ctx.send(f"{membro.mention} foi expurgado.", delete_after=15)
         except Exception as e:
-            await ctx.send(f"❌ Falha na sequência: {e}")
+            await ctx.send(f"❌ Falha na sequência: {e}", delete_after=15)
 
     @commands.hybrid_command(name="modstats", description="Estatísticas detalhadas de um moderador")
     @check_staff()
@@ -216,7 +216,7 @@ class punicoes(commands.Cog):
     async def modlogs(self, ctx, usuario: discord.User):
         await ctx.defer()
         canal_logs = ctx.guild.get_channel(self.ID_CANAL_LOGS)
-        if not canal_logs: return await ctx.send("❓ Canal de logs não encontrado.")
+        if not canal_logs: return await ctx.send("❓ Canal de logs não encontrado.", delete_after=15)
         
         punicoes_encontradas = []
         user_id_str = str(usuario.id)
@@ -246,7 +246,7 @@ class punicoes(commands.Cog):
                     punicoes_encontradas.append(info)
 
         if not punicoes_encontradas:
-            return await ctx.send(f"✅ Nenhuma punição recente para {usuario.mention}.")
+            return await ctx.send(f"✅ Nenhuma punição recente para {usuario.mention}.", delete_after=15)
 
         paginas = []
         for i in range(0, len(punicoes_encontradas), 2):
@@ -267,7 +267,7 @@ class punicoes(commands.Cog):
     @check_staff()
     async def mute(self, ctx, membro: discord.Member = None, tempo: str = "10min", *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         if ctx.interaction: await ctx.defer()
         
@@ -275,10 +275,10 @@ class punicoes(commands.Cog):
             await self.avisar_usuario(membro, "mute", motivo, ctx.guild.name)
             if tempo == "0":
                 cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
-                if not cargo: return await ctx.send("❌ Cargo mutado não configurado.")
+                if not cargo: return await ctx.send("❌ Cargo mutado não configurado.", delete_after=15)
                 await membro.add_roles(cargo)
                 await self.enviar_log(ctx, membro, "mute permanente", motivo, discord.Color.red(), "infinito")
-                await ctx.send(f"✅ {membro.mention} mutado **permanente**.\n**Motivo:** {motivo}")
+                await ctx.send(f"✅ {membro.mention} mutado **permanente**.\n**Motivo:** {motivo}", delete_after=15)
             else:
                 match = re.fullmatch(r"(\d+)(min|h|d)", tempo.lower())
                 if match:
@@ -286,29 +286,29 @@ class punicoes(commands.Cog):
                     seg = qtd * {'d': 86400, 'h': 3600, 'min': 60}[uni]
                     await membro.timeout(datetime.timedelta(seconds=seg), reason=motivo)
                     await self.enviar_log(ctx, membro, "mute", motivo, discord.Color.red(), tempo)
-                    await ctx.send(f"✅ {membro.mention} silenciado por **{tempo}**.\n**Motivo:** {motivo}")
+                    await ctx.send(f"✅ {membro.mention} silenciado por **{tempo}**.\n**Motivo:** {motivo}", delete_after=15)
         except:
-            await ctx.send("❌ Erro de permissão.")
+            await ctx.send("❌ Erro de permissão.", delete_after=15)
 
     @commands.hybrid_command(name="unmute", description="Remove silenciamento")
     @check_staff()
     async def unmute(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         try:
             await membro.timeout(None)
             cargo = ctx.guild.get_role(self.ID_CARGO_MUTADO)
             if cargo and cargo in membro.roles: await membro.remove_roles(cargo)
             await self.enviar_log(ctx, membro, "unmute", motivo, discord.Color.green())
-            await ctx.send(f"✅ {membro.mention} desmutado.")
+            await ctx.send(f"✅ {membro.mention} desmutado.", delete_after=15)
         except:
-            await ctx.send("❌ Erro ao desmutar.")
+            await ctx.send("❌ Erro ao desmutar.", delete_after=15)
 
     @commands.hybrid_command(name="warn", description="Aplica um aviso")
     @check_staff()
     async def warn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         self.warns_cache[membro.id] = self.warns_cache.get(membro.id, 0) + 1
         atual = self.warns_cache[membro.id]
@@ -317,53 +317,53 @@ class punicoes(commands.Cog):
         if atual >= 3:
             self.warns_cache[membro.id] = 0
             await membro.timeout(datetime.timedelta(hours=1))
-            await ctx.send(f"🚨 {membro.mention} mutado por 1h (3 avisos).")
+            await ctx.send(f"🚨 {membro.mention} mutado por 1h (3 avisos).", delete_after=15)
         else:
-            await ctx.send(f"✅ {membro.mention} avisado ({atual}/3).")
+            await ctx.send(f"✅ {membro.mention} avisado ({atual}/3).", delete_after=15)
 
     @commands.hybrid_command(name="unwarn", description="Remove os avisos de um membro")
     @check_staff()
     async def unwarn(self, ctx, membro: discord.Member = None, *, motivo: str = "não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         self.warns_cache[membro.id] = 0
         await self.enviar_log(ctx, membro, "unwarn", motivo, discord.Color.green())
-        await ctx.send(f"✅ Avisos de {membro.mention} resetados.")
+        await ctx.send(f"✅ Avisos de {membro.mention} resetados.", delete_after=15)
 
     @commands.hybrid_command(name="kick", description="Expulsa um membro")
     @check_staff()
     async def kick(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         await self.avisar_usuario(membro, "kick", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "kick", motivo, discord.Color.yellow())
         await membro.kick(reason=motivo)
-        await ctx.send(f"✅ {membro.mention} expulso.")
+        await ctx.send(f"✅ {membro.mention} expulso.", delete_after=15)
 
     @commands.hybrid_command(name="ban", description="Bane um membro")
     @check_staff()
     @check_pode_banir()
     async def ban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         await self.avisar_usuario(membro, "ban", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "ban", motivo, discord.Color.from_rgb(0, 0, 0))
         await membro.ban(reason=motivo, delete_message_days=1)
-        await ctx.send(f"✅ {membro.mention} banido.")
+        await ctx.send(f"✅ {membro.mention} banido.", delete_after=15)
 
     @commands.hybrid_command(name="ipban", description="Bane um membro e seu endereço IP")
     @check_staff()
     @check_pode_banir()
     async def ipban(self, ctx, membro: discord.Member = None, *, motivo="não informado"):
         membro = await self.identificar_alvo(ctx, membro)
-        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.")
+        if not membro: return await ctx.send("❓ Mencione alguém ou responda a uma mensagem.", delete_after=15)
         if not await self.checar_hierarquia(ctx, membro): return
         await self.avisar_usuario(membro, "ipban", motivo, ctx.guild.name)
         await self.enviar_log(ctx, membro, "ipban", motivo, discord.Color.from_rgb(20, 20, 20))
         await membro.ban(reason=f"IPBAN: {motivo}", delete_message_days=7)
-        await ctx.send(f"🚫 {membro.mention} foi banido por IP.")
+        await ctx.send(f"🚫 {membro.mention} foi banido por IP.", delete_after=15)
 
     @commands.hybrid_command(name="unban", description="Desbane pelo ID")
     @check_staff()
@@ -372,17 +372,17 @@ class punicoes(commands.Cog):
         user = await self.bot.fetch_user(int(user_id))
         await ctx.guild.unban(user)
         await self.enviar_log(ctx, user, "unban", motivo, discord.Color.green())
-        await ctx.send(f"✅ `{user.name}` desbanido.")
+        await ctx.send(f"✅ `{user.name}` desbanido.", delete_after=15)
 
     @commands.hybrid_command(name="clear", description="Limpa o chat")
     @check_staff()
     async def clear(self, ctx, quantidade: int):
-        if quantidade <= 0: return await ctx.send("❌ Use números positivos.")
+        if quantidade <= 0: return await ctx.send("❌ Use números positivos.", delete_after=15)
         if ctx.interaction: await ctx.defer(ephemeral=True)
         deleted = await ctx.channel.purge(limit=quantidade if ctx.interaction else quantidade + 1)
         res = f"✅ **{len(deleted) if ctx.interaction else len(deleted)-1}** mensagens apagadas."
         if ctx.interaction: await ctx.interaction.followup.send(res)
-        else: await ctx.send(res, delete_after=5)
+        else: await ctx.send(res, delete_after=10)
 
 async def setup(bot):
     await bot.add_cog(punicoes(bot))
