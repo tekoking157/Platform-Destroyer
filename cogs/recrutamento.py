@@ -10,6 +10,8 @@ ID_CANAL_LOGS = 1392511238759780475
 IDS_PODEM_POSTAR = [1304003843172077659, 1291064098741555273]
 IDS_AVALIADORES = [1357569800947236998, 1357569800947237000, 1414283694662750268]
 
+vagas_abertas = True
+
 def pode_postar():
     async def predicate(ctx):
         tem_permissao = any(role.id in IDS_PODEM_POSTAR for role in ctx.author.roles)
@@ -25,6 +27,8 @@ class BotaoAbrirRecrutamento(ui.View):
 
     @ui.button(label="Candidatar-se à Equipe", style=discord.ButtonStyle.primary, custom_id="btn_abrir_form_perma")
     async def callback(self, interaction: discord.Interaction, button: ui.Button):
+        if not vagas_abertas:
+            return await interaction.response.send_message("❌ As vagas estão fechadas no momento.", ephemeral=True)
         await interaction.response.send_modal(FormularioRecrutamento())
 
 class BotoesAvaliacao(ui.View):
@@ -107,7 +111,6 @@ class recrutamento(commands.Cog):
     @commands.command(name="postar_recrutamento")
     @pode_postar()
     async def postar_recrutamento(self, ctx):
-        """Posta a mensagem oficial de recrutamento"""
         embed = discord.Embed(title="<:PD:1384574150080729228> RECRUTAMENTO | PLATFORM DESTROYER", color=COR_AZUL)
         embed.description = (
             "**Deseja fazer parte da nossa staff de moderação?**\n\n"
@@ -122,9 +125,24 @@ class recrutamento(commands.Cog):
         try: await ctx.message.delete()
         except: pass 
 
+    @commands.command(name="vagas_on")
+    @pode_postar()
+    async def vagas_on(self, ctx):
+        global vagas_abertas
+        vagas_abertas = True
+        await ctx.send("✅ As vagas de recrutamento foram **ABERTAS**.")
+
+    @commands.command(name="vagas_off")
+    @pode_postar()
+    async def vagas_off(self, ctx):
+        global vagas_abertas
+        vagas_abertas = False
+        await ctx.send("❌ As vagas de recrutamento foram **FECHADAS**.")
+
 async def setup(bot):
     bot.add_view(BotaoAbrirRecrutamento()) 
     await bot.add_cog(recrutamento(bot))
+
 
 
 
