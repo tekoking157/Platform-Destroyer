@@ -301,7 +301,7 @@ class TicketView(discord.ui.View):
         )
         embed.set_image(url=BANNER_URL)
         
-        await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo))
+        await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo), allowed_mentions=discord.AllowedMentions(roles=True))
         await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
 
 class ticket(commands.Cog):
@@ -368,6 +368,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
