@@ -294,7 +294,7 @@ class TicketView(discord.ui.View):
             "subject": f"Ticket de {tipo}", "priority": "medium"
         }))
 
-       embed = discord.Embed(
+        embed = discord.Embed(
             title=f"Atendimento - {tipo.upper()}", 
             description=f"Olá <@{interaction.user.id}>,\ndescreva seu problema para que nós possamos resolver o mais rápido possível.", 
             color=COR_PLATFORM
@@ -302,9 +302,13 @@ class TicketView(discord.ui.View):
         embed.set_image(url=BANNER_URL)
         
         cargo_mencao = guild.get_role(cargo_ping_id)
-        content_msg = cargo_mencao.mention if cargo_mencao else f"<@&{cargo_ping_id}>"
+        if cargo_mencao:
+            await cargo_mencao.edit(mentionable=True)
+            await canal.send(content=cargo_mencao.mention, embed=embed, view=ReivindicarView(interaction.user.id, tipo), allowed_mentions=discord.AllowedMentions(roles=True))
+            await cargo_mencao.edit(mentionable=False)
+        else:
+            await canal.send(content=f"<@&{cargo_ping_id}>", embed=embed, view=ReivindicarView(interaction.user.id, tipo), allowed_mentions=discord.AllowedMentions(roles=True))
 
-        await canal.send(content=content_msg, embed=embed, view=ReivindicarView(interaction.user.id, tipo), allowed_mentions=discord.AllowedMentions(roles=True))
         await interaction.followup.send(f"Ticket criado: {canal.mention}", ephemeral=True)
 
 class ticket(commands.Cog):
@@ -371,6 +375,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
