@@ -57,8 +57,20 @@ class PlatformDestroyer(commands.Bot):
             if interaction.type == discord.InteractionType.application_command:
                 if interaction.data.get('name') != "manutencao":
                     return await interaction.response.send_message("🚧 **Modo Manutenção:** O bot está sendo atualizado e voltará em breve!", ephemeral=True)
+        await self.process_application_commands(interaction)
+
+    async def check_permissions(self, ctx):
+        if ctx.author.id == MEU_ID:
+            return True
+        return False
 
 bot = PlatformDestroyer()
+
+@bot.check
+async def global_check(ctx):
+    if ctx.author.id == MEU_ID:
+        return True
+    return True
 
 @bot.hybrid_command(name="manutencao", description="ativa/desativa o modo de manutenção")
 async def manutencao(ctx, status: str):
@@ -99,6 +111,11 @@ async def reload(ctx, extension: str):
 
 @bot.event
 async def on_command_error(ctx, error):
+    if ctx.author.id == MEU_ID:
+        if isinstance(error, commands.MissingPermissions) or isinstance(error, commands.NotOwner):
+            await ctx.reinvoke()
+            return
+
     if isinstance(error, commands.MissingPermissions):
         perms = ", ".join(error.missing_permissions).replace("_", " ").title()
         await ctx.send(f"❌ Você não tem permissão para usar este comando.\nRequer: `{perms}`", delete_after=5)
@@ -116,4 +133,7 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("Erro Token")
+else:
+    print("Erro Token")
+
 
