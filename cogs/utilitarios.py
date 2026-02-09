@@ -160,7 +160,7 @@ class utilitarios(commands.Cog):
         try:
             await membro.edit(nick=nome)
             if not ctx.interaction: await ctx.message.delete()
-            await ctx.send(f"{EMOJI_SETA} Apelido de {membro.mention} alterado!", delete_after=3)
+            await ctx.send(f"{EMOJI_SERVER} Apelido de {membro.mention} alterado!", delete_after=3)
         except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
 
     @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
@@ -259,6 +259,7 @@ class utilitarios(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
