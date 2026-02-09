@@ -224,33 +224,19 @@ class utilitarios(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-        
-        cargos_mencionados = []
         for role_id in CARGOS_WHITELIST:
             role = ctx.guild.get_role(role_id)
-            if role:
-                await ctx.channel.set_permissions(role, send_messages=True)
-                cargos_mencionados.append(role.mention)
-        
-        lista_cargos = ", ".join(cargos_mencionados) if cargos_mencionados else "Nenhum cargo extra"
-        
-        mensagem = (
-            f"{EMOJI_SETA} | Canal bloqueado com sucesso! Use `?unlock` para destravar!\n"
-            f"🔹 | Os cargos {lista_cargos} ainda poderão falar no canal devido as permissões configuradas!"
-        )
-        await ctx.send(mensagem, allowed_mentions=discord.AllowedMentions.none())
+            if role: await ctx.channel.set_permissions(role, send_messages=True)
+        await ctx.send(f"{EMOJI_SETA} Canal trancado com sucesso!")
 
     @commands.hybrid_command(name="unlock", description="destranca o canal atual")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-        
         for role_id in CARGOS_WHITELIST:
             role = ctx.guild.get_role(role_id)
-            if role:
-                await ctx.channel.set_permissions(role, overwrite=None)
-
-        await ctx.send(f"{EMOJI_SETA} Canal desbloqueado!")
+            if role: await ctx.channel.set_permissions(role, overwrite=None)
+        await ctx.send(f"{EMOJI_SETA} Canal destrancado com sucesso!")
 
     @commands.hybrid_command(name="ping", description="mostra a latência do bot")
     async def ping(self, ctx):
@@ -265,11 +251,9 @@ class utilitarios(commands.Cog):
     @commands.hybrid_command(name="help", description="central de ajuda interativa")
     async def help(self, ctx):
         embed = discord.Embed(
-            description=f"{EMOJI_SERVER} **Central de Ajuda**\n\n{EMOJI_SETA} Selecione uma categoria no menu abaixo para ver os comandos disponíveis.", 
+            description=f"{EMOJI_SERVER} **Central de Ajuda**", 
             color=self.COR_PLATFORM
         )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_image(url="https://media.discordapp.net/attachments/1383636357745737801/1465105440789757972/bannerdestroyer.gif?ex=698908c5&is=6987b745&hm=f664b5a8d1d5107caa632ad222fd571e7aa0fe33cec8bb08d61b937292f1412c&=&width=612&height=216")
         view = HelpView(self.bot, ["Ticket", "Jishaku", "Seguranca"])
         await ctx.send(embed=embed, view=view)
 
