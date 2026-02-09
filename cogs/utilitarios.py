@@ -243,7 +243,7 @@ class utilitarios(commands.Cog):
     @commands.hybrid_command(name="unlock", description="destranca o canal atual")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
-        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=None)
+        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
         
         for role_id in CARGOS_WHITELIST:
             role = ctx.guild.get_role(role_id)
@@ -275,6 +275,7 @@ class utilitarios(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
+
 
 
 
