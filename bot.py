@@ -133,7 +133,7 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("Erro Token")
-else:
-    print("Erro Token")
+
+
 
 
