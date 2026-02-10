@@ -199,8 +199,9 @@ class ReivindicarView(discord.ui.View):
     @discord.ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="btn_close_perma")
     async def fechar_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         pode_fechar = (self.staff_id and interaction.user.id == self.staff_id) or \
-                      interaction.user.id == ID_DONO_BOT or \
-                      any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles)
+              interaction.user.id == ID_DONO_BOT or \
+              any(role.id in IDS_IMUNES_BLOQUEIO for role in interaction.user.roles) or \
+              any(role.id in IDS_PERMITIDOS_SUPORTE for role in interaction.user.roles)
 
         if not pode_fechar:
             return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
@@ -375,6 +376,7 @@ async def setup(bot):
     bot.add_view(TicketView())
     bot.add_view(ReivindicarView())
     await bot.add_cog(ticket(bot))
+
 
 
 
