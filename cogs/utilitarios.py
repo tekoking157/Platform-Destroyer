@@ -1,264 +1,218 @@
-import discord
-from discord import ui
-from discord.ext import commands
-import datetime
-import time
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, SlashCommandBuilder } = require('discord.js');
 
-ID_DONO = 1304003843172077659
-CARGOS_WHITELIST = [1357569800947236998, 1414283694662750268, 1357569800947237000]
+const ID_DONO = "1304003843172077659";
+const CARGOS_WHITELIST = ["1357569800947236998", "1414283694662750268", "1357569800947237000"];
+const EMOJI_SETA = "<:seta:1384562807369895946>";
+const EMOJI_SERVER = "<:server:1413985224223621212>";
+const COR_PLATFORM = 0x5603AD;
 
-EMOJI_SETA = "<:seta:1384562807369895946>"
-EMOJI_SERVER = "<:server:1413985224223621212>"
+let afkUsers = new Map();
+let startTime = Date.now();
 
-class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
-    titulo = ui.TextInput(label="Título", placeholder="Título do aviso...", required=True)
-    descricao = ui.TextInput(label="Descrição", style=discord.TextStyle.paragraph, placeholder="Conteúdo principal...", required=True)
-    cor = ui.TextInput(label="Cor Hex (Ex: #5603AD)", placeholder="#5603AD", default="#5603AD", required=False, min_length=7, max_length=7)
-    imagem = ui.TextInput(label="URL da Imagem (Opcional)", placeholder="https://...", required=False)
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('util')
+        .setDescription('Comandos utilitários')
+        .addSubcommand(s => s.setName('ping').setDescription('Veja o ping do bot'))
+        .addSubcommand(s => s.setName('afk').setDescription('Fique AFK').addStringOption(o => o.setName('motivo').setDescription('Motivo do AFK'))),
 
-    async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != ID_DONO:
-            return await interaction.response.send_message("❌ Acesso negado.", ephemeral=True)
+    async execute(interaction) {
+        const sub = interaction.options.getSubcommand();
+        if (sub === 'ping') {
+            return interaction.reply(`${EMOJI_SERVER} Pong! **${interaction.client.ws.ping}ms**`);
+        }
+        if (sub === 'afk') {
+            const motivo = interaction.options.getString('motivo') || "não informado";
+            const nickOriginal = interaction.member.displayName;
+            afkUsers.set(interaction.user.id, { motivo, tempo: Date.now(), nickOriginal });
+            try { await interaction.member.setNickname(`[AFK] ${nickOriginal}`.slice(0, 32)); } catch (e) {}
+            const embed = new EmbedBuilder().setDescription(`${EMOJI_SERVER} ${interaction.user}, seu AFK foi definido!\n${EMOJI_SETA} Motivo: **${motivo}**`).setColor(COR_PLATFORM);
+            return interaction.reply({ embeds: [embed] });
+        }
+    },
 
-        cor_final = discord.Color.from_rgb(86, 3, 173)
-        if self.cor.value:
-            try:
-                cor_final = discord.Color(int(self.cor.value.lstrip('#'), 16))
-            except: pass
+    async messageRun(message) {
+        if (message.author.bot || !message.guild) return;
 
-        embed = discord.Embed(
-            title=self.titulo.value, 
-            description=self.descricao.value, 
-            color=cor_final, 
-            timestamp=datetime.datetime.now()
-        )
-        if self.imagem.value and self.imagem.value.startswith("http"):
-            embed.set_image(url=self.imagem.value)
-            
-        embed.set_footer(text=f"Enviado por: {interaction.user.name}", icon_url=interaction.user.display_avatar.url)
-        
-        await interaction.response.send_message(f"{EMOJI_SETA} Embed enviado com sucesso!", ephemeral=True)
-        await interaction.channel.send(embed=embed)
+        if (afkUsers.has(message.author.id)) {
+            const dados = afkUsers.get(message.author.id);
+            const decorrido = Date.now() - dados.tempo;
+            if (decorrido > 7000) {
+                afkUsers.delete(message.author.id);
+                try { await message.member.setNickname(dados.nickOriginal); } catch (e) {}
+                const segundos = Math.floor(decorrido / 1000);
+                const h = Math.floor(segundos / 3600);
+                const m = Math.floor((segundos % 3600) / 60);
+                const s = segundos % 60;
+                await message.channel.send(`👋 Bem-vindo de volta ${message.author}! Removi seu AFK. (Duração: \`${h}h ${m}m ${s}s\`)`).then(msg => setTimeout(() => msg.delete(), 10000));
+            }
+        }
 
-class HelpSelect(ui.Select):
-    def __init__(self, bot, esconder):
-        options = [
-            discord.SelectOption(
-                label=name.capitalize(), 
-                description=f"Comandos do módulo {name}", 
-                emoji=discord.PartialEmoji.from_str(EMOJI_SETA),
-                value=name  
-            )
-            for name, cog in bot.cogs.items() if name not in esconder
-        ]
-        super().__init__(placeholder="Selecione uma categoria...", options=options)
-        self.bot = bot
+        if (message.mentions.users.size > 0) {
+            message.mentions.users.forEach(async (user) => {
+                if (afkUsers.has(user.id)) {
+                    const dados = afkUsers.get(user.id);
+                    const timestamp = Math.floor(dados.tempo / 1000);
+                    const embed = new EmbedBuilder().setDescription(`${EMOJI_SERVER} <@${user.id}> está **AFK** no momento.\n\n${EMOJI_SETA} **Motivo:** ${dados.motivo}\n${EMOJI_SETA} **Desde:** <t:${timestamp}:R>`).setColor(COR_PLATFORM);
+                    await message.reply({ embeds: [embed] }).then(msg => setTimeout(() => msg.delete(), 15000));
+                }
+            });
+        }
 
-    async def callback(self, interaction: discord.Interaction):
-        cog = self.bot.get_cog(self.values[0])
-        if not cog:
-            return await interaction.response.send_message(f"❌ Categoria '{self.values[0]}' não encontrada.", ephemeral=True)
-            
-        cmds = [f"`{c.name}`" for c in cog.get_commands() if not c.hidden]
-        
-        embed = discord.Embed(
-            description=f"{EMOJI_SERVER} **Categoria: {self.values[0].capitalize()}**\n\n{' '.join(cmds) if cmds else 'Nenhum comando disponível.'}",
-            color=discord.Color.from_rgb(86, 3, 173)
-        )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text=f"Total de {len(cmds)} comandos | Platform Destroyer")
-        await interaction.response.edit_message(embed=embed)
+        if (!message.content.startsWith('?')) return;
+        const args = message.content.slice(1).trim().split(/ +/);
+        const command = args.shift().toLowerCase();
 
-class HelpView(ui.View):
-    def __init__(self, bot, esconder):
-        super().__init__(timeout=60)
-        self.add_item(HelpSelect(bot, esconder))
+        const listaComandos = ["afk", "serverinfo", "botinfo", "nicktroll", "say", "embed", "userinfo", "avatar", "banner", "lock", "unlock", "ping", "slowmode", "help"];
+        if (!listaComandos.includes(command)) return;
 
-class utilitarios(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.COR_PLATFORM = discord.Color.from_rgb(86, 3, 173)
-        self.start_time = time.time()
-        self.afk_users = {} 
+        if (command === 'afk') {
+            const motivo = args.join(" ") || "não informado";
+            const nickOriginal = message.member.displayName;
+            afkUsers.set(message.author.id, { motivo, tempo: Date.now(), nickOriginal });
+            try { await message.member.setNickname(`[AFK] ${nickOriginal}`.slice(0, 32)); } catch (e) {}
+            const embed = new EmbedBuilder().setDescription(`${EMOJI_SERVER} ${message.author}, seu AFK foi definido!\n${EMOJI_SETA} Motivo: **${motivo}**`).setColor(COR_PLATFORM);
+            await message.channel.send({ embeds: [embed] }).then(msg => setTimeout(() => msg.delete(), 10000));
+        }
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot:
-            return
-        if message.author.id in self.afk_users:
-            dados = self.afk_users[message.author.id]
-            decorrido_total = time.time() - dados['tempo']
-            if decorrido_total > 7:
-                self.afk_users.pop(message.author.id)
-                tempo_str = str(datetime.timedelta(seconds=int(decorrido_total)))
-                try: await message.author.edit(nick=dados['nick_original'])
-                except: pass
-                await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
-        for membro in message.mentions:
-            if membro.id in self.afk_users:
-                dados = self.afk_users[membro.id]
-                timestamp = int(dados['tempo'])
-                motivo = dados['motivo']
-                embed = discord.Embed(
-                    description=f"{EMOJI_SERVER} {membro.mention} está **AFK** no momento.\n\n{EMOJI_SETA} **Motivo:** {motivo}\n{EMOJI_SETA} **Desde:** <t:{timestamp}:R>",
-                    color=self.COR_PLATFORM
-                )
-                await message.reply(embed=embed, delete_after=15)
+        if (command === 'serverinfo') {
+            const g = message.guild;
+            const embed = new EmbedBuilder().setColor(COR_PLATFORM).setAuthor({ name: g.name, iconURL: g.iconURL() })
+                .setDescription(`${EMOJI_SETA} **Dono:** <@${g.ownerId}>\n${EMOJI_SETA} **ID:** \`${g.id}\`\n${EMOJI_SETA} **Criado:** <t:${Math.floor(g.createdTimestamp / 1000)}:R>\n──────────────────────────────\n${EMOJI_SETA} **Membros:** \`${g.memberCount}\`\n${EMOJI_SETA} **Boosts:** Nível \`${g.premiumTier}\` (${g.premiumSubscriptionCount})\n${EMOJI_SETA} **Canais:** \`${g.channels.cache.size}\``)
+                .setFooter({ text: `Solicitado por ${message.author.username}` });
+            if (g.bannerURL()) embed.setImage(g.bannerURL());
+            await message.channel.send({ embeds: [embed] });
+        }
 
-    @commands.hybrid_command(name="afk", description="avisa que você ficará offline")
-    async def afk(self, ctx, *, motivo: str = "não informado"):
-        nick_original = ctx.author.display_name
-        novo_nick = f"[AFK] {nick_original}"[:32]
-        self.afk_users[ctx.author.id] = {"motivo": motivo, "tempo": time.time(), "nick_original": nick_original}
-        try: await ctx.author.edit(nick=novo_nick)
-        except: pass
-        embed = discord.Embed(description=f"{EMOJI_SERVER} {ctx.author.mention}, seu AFK foi definido!\n{EMOJI_SETA} Motivo: **{motivo}**", color=self.COR_PLATFORM)
-        await ctx.send(embed=embed, delete_after=10)
+        if (command === 'botinfo') {
+            const totalSec = Math.floor((Date.now() - startTime) / 1000);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            const embed = new EmbedBuilder().setColor(COR_PLATFORM).setAuthor({ name: "Platform Destroyer", iconURL: message.client.user.displayAvatarURL() })
+                .setDescription(`${EMOJI_SETA} **Dev:** <@${ID_DONO}>\n${EMOJI_SETA} **Ping:** \`${message.client.ws.ping}ms\`\n${EMOJI_SETA} **Uptime:** \`${h}h ${m}m ${s}s\`\n──────────────────────────────\n${EMOJI_SETA} **Servidores:** \`${message.client.guilds.cache.size}\`\n${EMOJI_SETA} **Linguagem:** Node.js\n${EMOJI_SETA} **Versão:** \`14.x\``).setThumbnail(message.client.user.displayAvatarURL());
+            await message.channel.send({ embeds: [embed] });
+        }
 
-    @commands.hybrid_command(name="serverinfo", description="mostra informações detalhadas do servidor")
-    async def serverinfo(self, ctx):
-        g = ctx.guild
-        embed = discord.Embed(color=self.COR_PLATFORM)
-        embed.set_author(name=f"{g.name}", icon_url=g.icon.url if g.icon else None)
-        if g.banner: embed.set_image(url=g.banner.url)
-        
-        desc = (
-            f"{EMOJI_SETA} **Dono:** {g.owner.mention} (`{g.owner_id}`)\n"
-            f"{EMOJI_SETA} **ID:** `{g.id}`\n"
-            f"{EMOJI_SETA} **Criado:** <t:{int(g.created_at.timestamp())}:R>\n"
-            "──────────────────────────────\n"
-            f"{EMOJI_SETA} **Membros:** `{g.member_count}` (Bots: `{len([m for m in g.members if m.bot])}`)\n"
-            f"{EMOJI_SETA} **Boosts:** Nível `{g.premium_tier}` ({g.premium_subscription_count} boosts)\n"
-            f"{EMOJI_SETA} **Canais:** Texto: `{len(g.text_channels)}` | Voz: `{len(g.voice_channels)}`"
-        )
-        embed.description = desc
-        embed.set_footer(text=f"Solicitado por {ctx.author.name}", icon_url=ctx.author.display_avatar.url)
-        await ctx.send(embed=embed)
+        if (command === 'nicktroll') {
+            if (!message.member.permissions.has('ManageNicknames')) return;
+            const target = message.mentions.members.first();
+            const novoNick = args.slice(1).join(" ") || "cupiditys slave";
+            if (!target) return message.reply("Mencione um membro.");
+            try {
+                await target.setNickname(novoNick);
+                await message.channel.send(`${EMOJI_SERVER} Apelido de ${target} alterado!`).then(msg => setTimeout(() => msg.delete(), 3000));
+                await message.delete().catch(() => {});
+            } catch (e) { await message.channel.send("❌ Erro de hierarquia!"); }
+        }
 
-    @commands.hybrid_command(name="botinfo", description="mostra informações técnicas sobre o bot")
-    async def botinfo(self, ctx):
-        uptime = str(datetime.timedelta(seconds=int(round(time.time() - self.start_time))))
-        embed = discord.Embed(color=self.COR_PLATFORM)
-        embed.set_author(name="Platform Destroyer", icon_url=self.bot.user.display_avatar.url)
-        
-        desc = (
-            f"{EMOJI_SETA} **Dev:** <@1304003843172077659>\n"
-            f"{EMOJI_SETA} **Ping:** `{round(self.bot.latency * 1000)}ms`\n"
-            f"{EMOJI_SETA} **Uptime:** `{uptime}`\n"
-            "──────────────────────────────\n"
-            f"{EMOJI_SETA} **Servidores:** `{len(self.bot.guilds)}`\n"
-            f"{EMOJI_SETA} **Linguagem:** Python (discord.py)\n"
-            f"{EMOJI_SETA} **Versão:** `2.0.1`"
-        )
-        embed.description = desc
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        await ctx.send(embed=embed)
+        if (command === 'say') {
+            if (message.author.id !== ID_DONO) return;
+            const msg = args.join(" ");
+            if (!msg) return;
+            await message.delete().catch(() => {});
+            await message.channel.send(msg);
+        }
 
-    @commands.hybrid_command(name="nicktroll", description="trolla o apelido de um membro")
-    @commands.has_permissions(manage_nicknames=True)
-    async def nicktroll(self, ctx, membro: discord.Member, *, nome: str = "cupiditys slave"):
-        try:
-            await membro.edit(nick=nome)
-            if not ctx.interaction: await ctx.message.delete()
-            await ctx.send(f"{EMOJI_SERVER} Apelido de {membro.mention} alterado!", delete_after=3)
-        except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
+        if (command === 'embed') {
+            if (message.author.id !== ID_DONO) return;
+            const btn = new ButtonBuilder().setCustomId('open_embed_modal').setLabel('Abrir Editor').setStyle(ButtonStyle.Primary).setEmoji(EMOJI_SETA);
+            const row = new ActionRowBuilder().addComponents(btn);
+            await message.channel.send({ content: "Clique abaixo para criar seu embed:", components: [row] });
+        }
 
-    @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
-    async def say(self, ctx, *, mensagem: str):
-        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
-        if not ctx.interaction: await ctx.message.delete()
-        await ctx.send(mensagem)
+        if (command === 'userinfo') {
+            const m = message.mentions.members.first() || message.member;
+            const roles = m.roles.cache.filter(r => r.name !== '@everyone').map(r => r.toString());
+            const embed = new EmbedBuilder().setColor(COR_PLATFORM).setAuthor({ name: m.user.username, iconURL: m.user.displayAvatarURL() }).setThumbnail(m.user.displayAvatarURL())
+                .setDescription(`${EMOJI_SETA} **Tag:** ${m}\n${EMOJI_SETA} **ID:** \`${m.id}\`\n${EMOJI_SETA} **Criado:** <t:${Math.floor(m.user.createdTimestamp / 1000)}:D>\n${EMOJI_SETA} **Entrou:** <t:${Math.floor(m.joinedTimestamp / 1000)}:R>\n──────────────────────────────\n${EMOJI_SERVER} **Cargos (${roles.length}):**\n${roles.slice(0, 5).join(' ') || 'Nenhum'}`);
+            await message.channel.send({ embeds: [embed] });
+        }
 
-    @commands.hybrid_command(name="embed", description="envia uma mensagem personalizada em embed")
-    async def embed(self, ctx):
-        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
-        if ctx.interaction: await ctx.interaction.response.send_modal(EmbedModal())
-        else:
-            view = ui.View()
-            btn = ui.Button(label="Abrir Editor", style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str(EMOJI_SETA))
-            async def callback(interaction):
-                if interaction.user.id == ID_DONO: await interaction.response.send_modal(EmbedModal())
-            btn.callback = callback
-            view.add_item(btn)
-            await ctx.send("Clique abaixo para criar seu embed:", view=view, delete_after=60)
+        if (command === 'avatar') {
+            const m = message.mentions.users.first() || message.author;
+            const embed = new EmbedBuilder().setTitle(`Avatar de ${m.username}`).setImage(m.displayAvatarURL({ size: 2048 })).setColor(COR_PLATFORM);
+            await message.channel.send({ embeds: [embed] });
+        }
 
-    @commands.hybrid_command(name="userinfo", description="mostra informações detalhadas de um usuário")
-    async def userinfo(self, ctx, membro: discord.Member = None):
-        membro = membro or ctx.author
-        roles = [role.mention for role in membro.roles if role.name != "@everyone"]
-        
-        embed = discord.Embed(color=self.COR_PLATFORM)
-        embed.set_author(name=f"{membro.name}", icon_url=membro.display_avatar.url)
-        embed.set_thumbnail(url=membro.display_avatar.url)
-        
-        desc = (
-            f"{EMOJI_SETA} **Tag:** {membro.mention}\n"
-            f"{EMOJI_SETA} **ID:** `{membro.id}`\n"
-            f"{EMOJI_SETA} **Criado:** <t:{int(membro.created_at.timestamp())}:D>\n"
-            f"{EMOJI_SETA} **Entrou:** <t:{int(membro.joined_at.timestamp())}:R>\n"
-            "──────────────────────────────\n"
-            f"{EMOJI_SERVER} **Cargos ({len(roles)}):**\n"
-            f"{' '.join(roles[:5]) if roles else 'Nenhum'}"
-        )
-        embed.description = desc
-        embed.set_footer(text=f"ID do Autor: {ctx.author.id}")
-        await ctx.send(embed=embed)
+        if (command === 'banner') {
+            const m = message.mentions.users.first() || message.author;
+            const user = await message.client.users.fetch(m.id, { force: true });
+            if (!user.bannerURL()) return message.reply("❌ Sem banner.");
+            const embed = new EmbedBuilder().setTitle(`Banner de ${m.username}`).setImage(user.bannerURL({ size: 2048 })).setColor(COR_PLATFORM);
+            await message.channel.send({ embeds: [embed] });
+        }
 
-    @commands.hybrid_command(name="avatar", description="mostra o avatar de um usuário")
-    async def avatar(self, ctx, membro: discord.Member = None):
-        membro = membro or ctx.author
-        embed = discord.Embed(title=f"Avatar de {membro.name}", color=self.COR_PLATFORM)
-        embed.set_image(url=membro.display_avatar.url)
-        await ctx.send(embed=embed)
+        if (command === 'lock') {
+            if (!message.member.permissions.has('ManageChannels')) return;
+            await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+            for (const id of CARGOS_WHITELIST) {
+                const role = message.guild.roles.cache.get(id);
+                if (role) await message.channel.permissionOverwrites.edit(role, { SendMessages: true });
+            }
+            await message.channel.send(`${EMOJI_SETA} Canal trancado com sucesso!`);
+        }
 
-    @commands.hybrid_command(name="banner", description="mostra o banner de um usuário")
-    async def banner(self, ctx, membro: discord.Member = None):
-        membro = membro or ctx.author
-        user = await self.bot.fetch_user(membro.id)
-        if not user.banner: return await ctx.send("❌ Sem banner.", ephemeral=True)
-        embed = discord.Embed(title=f"Banner de {membro.name}", color=self.COR_PLATFORM)
-        embed.set_image(url=user.banner.url)
-        await ctx.send(embed=embed)
+        if (command === 'unlock') {
+            if (!message.member.permissions.has('ManageChannels')) return;
+            await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+            for (const id of CARGOS_WHITELIST) {
+                const role = message.guild.roles.cache.get(id);
+                if (role) await message.channel.permissionOverwrites.delete(role);
+            }
+            await message.channel.send(`${EMOJI_SETA} Canal destrancado com sucesso!`);
+        }
 
-    @commands.hybrid_command(name="lock", description="tranca o canal atual")
-    @commands.has_permissions(manage_channels=True)
-    async def lock(self, ctx):
-        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-        for role_id in CARGOS_WHITELIST:
-            role = ctx.guild.get_role(role_id)
-            if role: await ctx.channel.set_permissions(role, send_messages=True)
-        await ctx.send(f"{EMOJI_SETA} Canal trancado com sucesso!")
+        if (command === 'ping') {
+            await message.channel.send(`${EMOJI_SERVER} Pong! **${message.client.ws.ping}ms**`);
+        }
 
-    @commands.hybrid_command(name="unlock", description="destranca o canal atual")
-    @commands.has_permissions(manage_channels=True)
-    async def unlock(self, ctx):
-        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-        for role_id in CARGOS_WHITELIST:
-            role = ctx.guild.get_role(role_id)
-            if role: await ctx.channel.set_permissions(role, overwrite=None)
-        await ctx.send(f"{EMOJI_SETA} Canal destrancado com sucesso!")
+        if (command === 'slowmode') {
+            if (!message.member.permissions.has('ManageChannels')) return;
+            const seg = parseInt(args[0]) || 0;
+            await message.channel.setRateLimitPerUser(seg);
+            await message.channel.send(`${EMOJI_SETA} Modo lento: **${seg}s**.`);
+        }
 
-    @commands.hybrid_command(name="ping", description="mostra a latência do bot")
-    async def ping(self, ctx):
-        await ctx.send(f"{EMOJI_SERVER} Pong! **{round(self.bot.latency * 1000)}ms**")
+        if (command === 'help') {
+            const embed = new EmbedBuilder().setDescription(`${EMOJI_SERVER} **Central de Ajuda**`).setColor(COR_PLATFORM);
+            const select = new StringSelectMenuBuilder().setCustomId('help_select').setPlaceholder('Selecione uma categoria...')
+                .addOptions([{ label: 'Utilitários', description: 'Comandos gerais', value: 'utilitarios', emoji: EMOJI_SETA }, { label: 'Moderação', description: 'Comandos de staff', value: 'moderacao', emoji: EMOJI_SETA }]);
+            await message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(select)] });
+        }
+    },
 
-    @commands.hybrid_command(name="slowmode", description="define o slowmode do canal")
-    @commands.has_permissions(manage_channels=True)
-    async def slowmode(self, ctx, segundos: int):
-        await ctx.channel.edit(slowmode_delay=segundos)
-        await ctx.send(f"{EMOJI_SETA} Modo lento: **{segundos}s**.")
+    async onInteraction(i) {
+        if (i.isButton() && i.customId === 'open_embed_modal') {
+            if (i.user.id !== ID_DONO) return i.reply({ content: "❌ Negado.", ephemeral: true });
+            const modal = new ModalBuilder().setCustomId('embed_modal').setTitle('Criar Embed Personalizado');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título').setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('cor').setLabel('Cor Hex').setPlaceholder('#5603AD').setRequired(false)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('imagem').setLabel('URL Imagem').setRequired(false))
+            );
+            await i.showModal(modal);
+        }
+        if (i.isModalSubmit() && i.customId === 'embed_modal') {
+            const t = i.fields.getTextInputValue('titulo');
+            const d = i.fields.getTextInputValue('descricao');
+            const c = i.fields.getTextInputValue('cor') || '#5603AD';
+            const im = i.fields.getTextInputValue('imagem');
+            const embed = new EmbedBuilder().setTitle(t).setDescription(d).setColor(c.startsWith('#') ? parseInt(c.slice(1), 16) : COR_PLATFORM).setTimestamp();
+            if (im && im.startsWith('http')) embed.setImage(im);
+            embed.setFooter({ text: `Enviado por: ${i.user.username}`, iconURL: i.user.displayAvatarURL() });
+            await i.channel.send({ embeds: [embed] });
+            await i.reply({ content: `${EMOJI_SETA} Embed enviado!`, ephemeral: true });
+        }
+        if (i.isStringSelectMenu() && i.customId === 'help_select') {
+            const val = i.values[0];
+            let txt = val === 'utilitarios' ? "ping, afk, serverinfo, botinfo, userinfo, avatar, banner" : "nicktroll, say, embed, lock, unlock, slowmode";
+            await i.update({ embeds: [new EmbedBuilder().setTitle(val.toUpperCase()).setDescription(`\`${txt}\``).setColor(COR_PLATFORM)], components: i.message.components });
+        }
+    }
+};
 
-    @commands.hybrid_command(name="help", description="central de ajuda interativa")
-    async def help(self, ctx):
-        embed = discord.Embed(
-            description=f"{EMOJI_SERVER} **Central de Ajuda**", 
-            color=self.COR_PLATFORM
-        )
-        view = HelpView(self.bot, ["Ticket", "Jishaku", "Seguranca"])
-        await ctx.send(embed=embed, view=view)
-
-async def setup(bot):
-    await bot.add_cog(utilitarios(bot))
 
 
 
