@@ -14,7 +14,6 @@ class moderacao(commands.Cog):
 
     @commands.hybrid_command(name="up", description="Promove um membro a um cargo")
     async def up(self, ctx, membro: discord.Member, *, cargo: discord.Role):
-        """Uso: ?up @membro Nome do Cargo OU ID"""
         tem_permissao = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles)
         if not tem_permissao and ctx.author.id not in [ctx.guild.owner_id, MEU_ID]:
             return await ctx.send("❌ Você não possui um cargo autorizado para usar este comando.", ephemeral=True)
@@ -44,7 +43,6 @@ class moderacao(commands.Cog):
 
     @commands.hybrid_command(name="demote", description="Remove um cargo de um membro")
     async def demote(self, ctx, membro: discord.Member, *, cargo: discord.Role):
-        """Uso: ?demote @membro Nome do Cargo OU ID"""
         tem_permissao = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles)
         if not tem_permissao and ctx.author.id not in [ctx.guild.owner_id, MEU_ID]:
             return await ctx.send("❌ Você não possui um cargo autorizado para usar este comando.", ephemeral=True)
@@ -74,6 +72,7 @@ class moderacao(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(moderacao(bot))
+
 
 
 
