@@ -18,7 +18,7 @@ class EmbedModal(ui.Modal, title="Criar Embed Personalizado"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != ID_DONO:
-            return await interaction.response.send_message("❌ Acesso negado.", ephemeral=True)
+            return await interaction.response.send_message("<a:c_negativo:1384563046944608369> Acesso negado.", ephemeral=True)
 
         cor_final = discord.Color.from_rgb(86, 3, 173)
         if self.cor.value:
@@ -57,7 +57,7 @@ class HelpSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         cog = self.bot.get_cog(self.values[0])
         if not cog:
-            return await interaction.response.send_message(f"❌ Categoria '{self.values[0]}' não encontrada.", ephemeral=True)
+            return await interaction.response.send_message(f"<a:c_negativo:1384563046944608369> Categoria '{self.values[0]}' não encontrada.", ephemeral=True)
             
         cmds = [f"`{c.name}`" for c in cog.get_commands() if not c.hidden]
         
@@ -93,7 +93,7 @@ class utilitarios(commands.Cog):
                 tempo_str = str(datetime.timedelta(seconds=int(decorrido_total)))
                 try: await message.author.edit(nick=dados['nick_original'])
                 except: pass
-                await message.channel.send(f"👋 Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
+                await message.channel.send(f"<a:hello:1405003265153699891> Bem-vindo de volta {message.author.mention}! Removi seu AFK. (Duração: `{tempo_str}`)", delete_after=10)
         for membro in message.mentions:
             if membro.id in self.afk_users:
                 dados = self.afk_users[membro.id]
@@ -161,17 +161,17 @@ class utilitarios(commands.Cog):
             await membro.edit(nick=nome)
             if not ctx.interaction: await ctx.message.delete()
             await ctx.send(f"{EMOJI_SERVER} Apelido de {membro.mention} alterado!", delete_after=3)
-        except: await ctx.send("❌ Erro de hierarquia!", delete_after=5)
+        except: await ctx.send("<a:c_negativo:1384563046944608369> Erro de hierarquia!", delete_after=5)
 
     @commands.hybrid_command(name="say", description="faz o bot dizer algo no chat")
     async def say(self, ctx, *, mensagem: str):
-        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
+        if ctx.author.id != ID_DONO: return await ctx.send("<a:c_negativo:1384563046944608369> Negado.", ephemeral=True)
         if not ctx.interaction: await ctx.message.delete()
         await ctx.send(mensagem)
 
     @commands.hybrid_command(name="embed", description="envia uma mensagem personalizada em embed")
     async def embed(self, ctx):
-        if ctx.author.id != ID_DONO: return await ctx.send("❌ Negado.", ephemeral=True)
+        if ctx.author.id != ID_DONO: return await ctx.send("<a:c_negativo:1384563046944608369> Negado.", ephemeral=True)
         if ctx.interaction: await ctx.interaction.response.send_modal(EmbedModal())
         else:
             view = ui.View()
@@ -215,7 +215,7 @@ class utilitarios(commands.Cog):
     async def banner(self, ctx, membro: discord.Member = None):
         membro = membro or ctx.author
         user = await self.bot.fetch_user(membro.id)
-        if not user.banner: return await ctx.send("❌ Sem banner.", ephemeral=True)
+        if not user.banner: return await ctx.send("<a:c_negativo:1384563046944608369> Sem banner.", ephemeral=True)
         embed = discord.Embed(title=f"Banner de {membro.name}", color=self.COR_PLATFORM)
         embed.set_image(url=user.banner.url)
         await ctx.send(embed=embed)
@@ -259,13 +259,3 @@ class utilitarios(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(utilitarios(bot))
-
-
-
-
-
-
-
-
-
-
