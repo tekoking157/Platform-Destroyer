@@ -17,7 +17,7 @@ def pode_postar():
         tem_permissao = any(role.id in IDS_PODEM_POSTAR for role in ctx.author.roles)
         if ctx.author.id in IDS_PODEM_POSTAR or tem_permissao:
             return True
-        await ctx.send("❌ Apenas usuários autorizados podem postar o recrutamento.", ephemeral=True)
+        await ctx.send("<a:c_negativo:1384563046944608369> Apenas usuários autorizados podem postar o recrutamento.", ephemeral=True)
         return False
     return commands.check(predicate)
 
@@ -28,7 +28,7 @@ class BotaoAbrirRecrutamento(ui.View):
     @ui.button(label="Candidatar-se à Equipe", style=discord.ButtonStyle.primary, custom_id="btn_abrir_form_perma")
     async def callback(self, interaction: discord.Interaction, button: ui.Button):
         if not vagas_abertas:
-            return await interaction.response.send_message("❌ As vagas estão fechadas no momento.", ephemeral=True)
+            return await interaction.response.send_message("<a:c_negativo:1384563046944608369> As vagas estão fechadas no momento.", ephemeral=True)
         await interaction.response.send_modal(FormularioRecrutamento())
 
 class BotoesAvaliacao(ui.View):
@@ -40,24 +40,25 @@ class BotoesAvaliacao(ui.View):
         tem_cargo = any(role.id in IDS_AVALIADORES for role in interaction.user.roles)
         return interaction.user.id in IDS_PODEM_POSTAR or tem_cargo or interaction.user.id in IDS_AVALIADORES
 
-    @ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="✅", custom_id="btn_aprovar")
+    @ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="<a:1316869378276458648:1384573961324593152>", custom_id="btn_aprovar_perma")
     async def aprovar(self, interaction: discord.Interaction, button: ui.Button):
         if not await self.verificar_permissao_voto(interaction):
-            return await interaction.response.send_message("❌ Você não tem permissão para avaliar.", ephemeral=True)
+            return await interaction.response.send_message("<a:c_negativo:1384563046944608369> Você não tem permissão para avaliar.", ephemeral=True)
 
         await interaction.response.defer()
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
-        embed.title = "✅ FORMULÁRIO APROVADO"
+        embed.title = "<a:1316869378276458648:1384573961324593152> FORMULÁRIO APROVADO"
         embed.set_footer(text=f"Aprovado por: {interaction.user.name}")
         
-        for item in self.children: item.disabled = True
+        for item in self.children: 
+            item.disabled = True
         await interaction.edit_original_response(embed=embed, view=self)
         
         try:
             membro = await interaction.guild.fetch_member(self.membro_candidato_id)
             embed_dm = discord.Embed(
-                title="🎉 Parabéns!",
+                title="<a:e_congratulations_PD:1384562927851540565> Parabéns!",
                 description=f"Olá {membro.mention}, seu formulário para a equipe **Platform Destroyer** foi **APROVADO**.",
                 color=discord.Color.green()
             )
@@ -67,18 +68,20 @@ class BotoesAvaliacao(ui.View):
         except:
             await interaction.followup.send("Candidato aprovado, mas a DM está fechada.", ephemeral=True)
 
-    @ui.button(label="Recusar", style=discord.ButtonStyle.danger, emoji="❌", custom_id="btn_recusar")
+    @ui.button(label="Recusar", style=discord.ButtonStyle.danger, emoji="<a:c_negativo:1384563046944608369>", custom_id="btn_recusar_perma")
     async def recusar(self, interaction: discord.Interaction, button: ui.Button):
         if not await self.verificar_permissao_voto(interaction):
-             return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+             return await interaction.response.send_message("<a:c_negativo:1384563046944608369> Sem permissão.", ephemeral=True)
 
+        await interaction.response.defer()
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.red()
-        embed.title = "❌ FORMULÁRIO RECUSADO"
+        embed.title = "<a:c_negativo:1384563046944608369> FORMULÁRIO RECUSADO"
         embed.set_footer(text=f"Recusado por: {interaction.user.name}")
 
-        for item in self.children: item.disabled = True
-        await interaction.response.edit_message(embed=embed, view=self)
+        for item in self.children: 
+            item.disabled = True
+        await interaction.edit_original_response(embed=embed, view=self)
 
 class FormularioRecrutamento(ui.Modal, title='Recrutamento Platform Destroyer'):
     nome = ui.TextInput(label='Nome e Idade', placeholder='Ex: Pedro, 18 anos', required=True)
@@ -89,7 +92,7 @@ class FormularioRecrutamento(ui.Modal, title='Recrutamento Platform Destroyer'):
 
     async def on_submit(self, interaction: discord.Interaction):
         canal_logs = interaction.guild.get_channel(ID_CANAL_LOGS)
-        embed_staff = discord.Embed(title="📝 Novo Formulário Recebido", color=COR_AZUL, timestamp=datetime.datetime.now())
+        embed_staff = discord.Embed(title="<:Texto:1384574054442205245> Novo Formulário Recebido", color=COR_AZUL, timestamp=datetime.datetime.now())
         embed_staff.set_thumbnail(url=interaction.user.display_avatar.url)
         embed_staff.add_field(name="Candidato", value=interaction.user.mention, inline=True)
         embed_staff.add_field(name="Nome e Idade", value=self.nome.value, inline=True)
@@ -99,10 +102,11 @@ class FormularioRecrutamento(ui.Modal, title='Recrutamento Platform Destroyer'):
         embed_staff.add_field(name="Extras", value=self.extras.value or "Nenhuma", inline=False)
         
         if canal_logs:
-            await canal_logs.send(embed=embed_staff, view=BotoesAvaliacao(interaction.user.id))
-            await interaction.response.send_message(f"✅ {interaction.user.mention}, formulário enviado!", ephemeral=True)
+            view = BotoesAvaliacao(interaction.user.id)
+            await canal_logs.send(embed=embed_staff, view=view)
+            await interaction.response.send_message(f"<a:c_positivo:1384563046944608369> {interaction.user.mention}, formulário enviado!", ephemeral=True)
         else:
-            await interaction.response.send_message("❌ Erro: Canal de logs não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<a:c_negativo:1384563046944608369> Erro: Canal de logs não encontrado.", ephemeral=True)
 
 class recrutamento(commands.Cog):
     def __init__(self, bot):
@@ -130,19 +134,21 @@ class recrutamento(commands.Cog):
     async def vagas_on(self, ctx):
         global vagas_abertas
         vagas_abertas = True
-        await ctx.send("✅ As vagas de recrutamento foram **ABERTAS**.")
+        await ctx.send("<a:1316869378276458648:1384573961324593152> As vagas de recrutamento foram **ABERTAS**.")
 
     @commands.command(name="vagas_off")
     @pode_postar()
     async def vagas_off(self, ctx):
         global vagas_abertas
         vagas_abertas = False
-        await ctx.send("❌ As vagas de recrutamento foram **FECHADAS**.")
+        await ctx.send("<a:c_negativo:1384563046944608369> As vagas de recrutamento foram **FECHADAS**.")
 
 async def setup(bot):
-    bot.add_view(BotaoAbrirRecrutamento()) 
+    # Adiciona AMBAS as views persistentes
+    bot.add_view(BotaoAbrirRecrutamento())
+    bot.add_view(BotoesAvaliacao(membro_candidato_id=0))  # View genérica para persistência
+    
+    # Registra handlers para os botões com custom_id fixos
+    bot.add_view(BotoesAvaliacao(membro_candidato_id=0), message_id=None)  # Persistência global
+    
     await bot.add_cog(recrutamento(bot))
-
-
-
-
