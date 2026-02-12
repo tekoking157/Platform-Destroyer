@@ -13,7 +13,7 @@ def check_seguranca():
         tem_cargo = any(role.id in IDS_CARGOS_PERMITIDOS for role in ctx.author.roles)
         if ctx.author.id in WHITELIST_USERS or tem_cargo or ctx.author.guild_permissions.administrator:
             return True
-        await ctx.send("❌ Você não tem permissão para configurar o sistema de segurança.", ephemeral=True)
+        await ctx.send("<a:c_negativo:1384563046944608369> Você não tem permissão para configurar o sistema de segurança.", ephemeral=True)
         return False
     return commands.check(predicate)
 
@@ -46,9 +46,9 @@ class seguranca(commands.Cog):
     async def enviar_log(self, guild, usuario, acao, cor=discord.Color.orange()):
         canal = guild.get_channel(ID_CANAL_LOGS)
         if canal:
-            embed = discord.Embed(title="🛡️ SEGURANÇA PLATFORM", color=cor, timestamp=datetime.datetime.now())
-            embed.add_field(name="👤 Usuário", value=f"{usuario.mention} (`{usuario.id}`)", inline=True)
-            embed.add_field(name="📝 Ação", value=acao, inline=True)
+            embed = discord.Embed(title="<:Shield:1385488234137784391> SEGURANÇA PLATFORM", color=cor, timestamp=datetime.datetime.now())
+            embed.add_field(name="<:Member:1385508533952577597> Usuário", value=f"{usuario.mention} (`{usuario.id}`)", inline=True)
+            embed.add_field(name="<:Texto:1384574054442205245> Ação", value=acao, inline=True)
             try: await canal.send(embed=embed)
             except: pass
 
@@ -58,7 +58,7 @@ class seguranca(commands.Cog):
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_invite_ativo[ctx.guild.id] = (status == "on")
-        emoji = "✅" if status == "on" else "❌"
+        emoji = "<a:1316869378276458648:1384573961324593152>" if status == "on" else "<a:c_negativo:1384563046944608369>"
         await ctx.send(f"{emoji} | Anti-Invite: **{status.upper()}**")
 
     @commands.hybrid_command(name="antispam", description="Liga/Desliga anti-flood de mensagens")
@@ -67,7 +67,7 @@ class seguranca(commands.Cog):
         status = status.lower()
         if status not in ["on", "off"]: return await ctx.send("Use `on` ou `off`.")
         self.anti_spam_ativo[ctx.guild.id] = (status == "on")
-        emoji = "✅" if status == "on" else "❌"
+        emoji = "<a:1316869378276458648:1384573961324593152>" if status == "on" else "<a:c_negativo:1384563046944608369>"
         await ctx.send(f"{emoji} | Anti-Spam (Flood): **{status.upper()}**")
 
     @commands.Cog.listener()
@@ -99,7 +99,7 @@ class seguranca(commands.Cog):
                     await message.delete() 
                     if user_id not in self.spam_warned:
                         self.spam_warned.add(user_id)
-                        await message.channel.send(f"❌ {message.author.mention}, pare de floodar!", delete_after=3)
+                        await message.channel.send(f"<a:c_negativo:1384563046944608369> {message.author.mention}, pare de floodar!", delete_after=3)
                         await asyncio.sleep(15)
                         self.spam_warned.discard(user_id)
                 except: pass
@@ -156,10 +156,3 @@ class seguranca(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(seguranca(bot))
-
-
-
-
-
-
-
