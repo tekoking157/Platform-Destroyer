@@ -205,7 +205,7 @@ class AvaliacaoDMView(discord.ui.View):
         )
 
 
-
+# ================= VIEW REIVINDICAR (COM LOGS) =================
 
 class ReivindicarView(discord.ui.View):
     def __init__(self, user_id=None, tipo=None, staff_id=None):
@@ -213,6 +213,38 @@ class ReivindicarView(discord.ui.View):
         self.user_id = user_id
         self.tipo = tipo
         self.staff_id = staff_id
+    
+    async def enviar_log_ticket(self, interaction, acao, cor, detalhes=None):
+        """Envia logs do ticket para o canal configurado"""
+        canal_log = interaction.client.get_channel(ID_CANAL_LOG_TICKETS)
+        if not canal_log:
+            return
+        
+        embed = discord.Embed(
+            title=f"📋 Log de Ticket - {acao.upper()}",
+            color=cor,
+            timestamp=datetime.datetime.now()
+        )
+        
+        embed.add_field(name="Canal", value=f"{interaction.channel.mention} (`{interaction.channel.id}`)", inline=False)
+        embed.add_field(name="Tipo", value=self.tipo or "Desconhecido", inline=True)
+        embed.add_field(name="Dono", value=f"<@{self.user_id}>" if self.user_id else "Desconhecido", inline=True)
+        
+        if acao == "claim":
+            embed.add_field(name="Reivindicado por", value=f"<@{self.staff_id}>", inline=True)
+        
+        elif acao == "unclaim":
+            embed.add_field(name="Unclaimed por", value=f"<@{interaction.user.id}>", inline=True)
+        
+        elif acao == "close":
+            embed.add_field(name="Fechado por", value=f"<@{interaction.user.id}>", inline=True)
+            if self.staff_id:
+                embed.add_field(name="Atendente", value=f"<@{self.staff_id}>", inline=True)
+        
+        if detalhes:
+            embed.add_field(name="Detalhes", value=detalhes, inline=False)
+        
+        await canal_log.send(embed=embed)
 
     @discord.ui.button(
         label="Reivindicar",
@@ -235,12 +267,14 @@ class ReivindicarView(discord.ui.View):
 
         self.staff_id = interaction.user.id
 
-       
         await registrar_ticket_site({
             "action": "claim",
             "discord_channel_id": str(interaction.channel.id),
             "discord_user_id": str(self.staff_id)
         })
+
+        # LOG DO CLAIM
+        await self.enviar_log_ticket(interaction, "claim", discord.Color.blue())
 
         button.disabled = True
         button.label = f"Reivindicado por {interaction.user.display_name}"
@@ -262,9 +296,11 @@ class ReivindicarView(discord.ui.View):
                 any(r.id in IDS_IMUNES_BLOQUEIO for r in interaction.user.roles)):
             return await interaction.followup.send("<a:c_negativo:1384563046944608369> Sem permissão.", ephemeral=True)
 
+        # LOG DO UNCLAIM (antes de alterar)
+        await self.enviar_log_ticket(interaction, "unclaim", discord.Color.orange())
+
         self.staff_id = None
 
-      
         await registrar_ticket_site({
             "action": "unclaim",
             "discord_channel_id": str(interaction.channel.id)
@@ -287,18 +323,44 @@ class ReivindicarView(discord.ui.View):
     async def close(self, interaction, button):
         await interaction.response.defer()
 
-        if not (interaction.user.id == self.staff_id or 
-                interaction.user.id == ID_DONO_BOT or 
-                any(r.id in IDS_IMUNES_BLOQUEIO for r in interaction.user.roles)):
-            return await interaction.followup.send("<a:c_negativo:1384563046944608369> Sem permissão.", ephemeral=True)
-
+        canal = interaction.channel
+        tipo_ticket = None
+        if canal.topic:
+            for parte in canal.topic.split("|"):
+                if "Tipo:" in parte:
+                    tipo_ticket = parte.replace("Tipo:", "").strip()
+                    break
+        
+        tem_permissao = False
+        
+        if interaction.user.id == self.staff_id:
+            tem_permissao = True
+            
+        elif interaction.user.id == ID_DONO_BOT:
+            tem_permissao = True
+          
+        elif any(r.id in IDS_IMUNES_BLOQUEIO for r in interaction.user.roles):
+            tem_permissao = True
+        
+        elif tipo_ticket == "suporte" and any(r.id == ID_CARGO_SUPORTE for r in interaction.user.roles):
+            tem_permissao = True
+        
+        if not tem_permissao:
+            return await interaction.followup.send(
+                f"<a:c_negativo:1384563046944608369> Sem permissão para fechar este ticket.\n"
+                f"{'Apenas equipe de alta patente pode fechar denúncias.' if tipo_ticket == 'denuncia' else 'Você não tem permissão.'}",
+                ephemeral=True
+            )
+        
+        # LOG DO CLOSE (antes de deletar!)
+        await self.enviar_log_ticket(interaction, "close", discord.Color.red())
         
         await registrar_ticket_site({
-    "action": "close",
-    "discord_channel_id": str(interaction.channel.id),
-    "discord_user_id": str(interaction.user.id),  
-    "assigned_to": str(self.staff_id) if self.staff_id else None  
-})
+            "action": "close",
+            "discord_channel_id": str(interaction.channel.id),
+            "discord_user_id": str(interaction.user.id),  
+            "assigned_to": str(self.staff_id) if self.staff_id else None  
+        })
 
         if self.staff_id:
             registrar_stats(self.staff_id)
@@ -327,7 +389,6 @@ class ReivindicarView(discord.ui.View):
 
 
 # ================= VIEW PRINCIPAL =================
-# ✅ CORRIGIDO: Limite de tickets, menção de cargos e payload do OPEN
 
 class TicketView(discord.ui.View):
     def __init__(self):
@@ -359,7 +420,6 @@ class TicketView(discord.ui.View):
         
         nome = f"{tipo}-{interaction.user.name}".lower().replace(" ", "-")
         
-        # ✅ LIMITE DE TICKETS: 1 por usuário
         tickets_abertos = 0
         for channel in categoria.channels:
             if channel.topic and f"Dono: {interaction.user.id}" in channel.topic:
@@ -389,12 +449,25 @@ class TicketView(discord.ui.View):
             topic=f"Dono: {interaction.user.id} | Tipo: {tipo} | Aberto: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
         
-        # ✅ CORRIGIDO: OPEN com discord_channel_id e discord_user_id
         await registrar_ticket_site({
             "action": "open",
             "discord_channel_id": str(canal.id),
             "discord_user_id": str(interaction.user.id)
         })
+        
+        # LOG DO OPEN
+        canal_log = interaction.client.get_channel(ID_CANAL_LOG_TICKETS)
+        if canal_log:
+            embed_log = discord.Embed(
+                title="📋 Log de Ticket - ABERTO",
+                color=discord.Color.green(),
+                timestamp=datetime.datetime.now()
+            )
+            embed_log.add_field(name="Canal", value=f"{canal.mention} (`{canal.id}`)", inline=False)
+            embed_log.add_field(name="Tipo", value=tipo, inline=True)
+            embed_log.add_field(name="Aberto por", value=f"<@{interaction.user.id}>", inline=True)
+            embed_log.add_field(name="Dono", value=f"<@{interaction.user.id}>", inline=True)
+            await canal_log.send(embed=embed_log)
         
         embed = discord.Embed(
             title=f"Atendimento - {tipo.upper()}",
@@ -403,7 +476,6 @@ class TicketView(discord.ui.View):
         )
         embed.set_image(url=BANNER_URL)
         
-        # ✅ MENÇÃO DE CARGOS CORRIGIDA
         cargo_ping = guild.get_role(cargo_ping_id)
         await canal.send(
             content=f"{cargo_ping.mention}" if cargo_ping else None,
@@ -434,8 +506,6 @@ class Ticket(commands.Cog):
                 "• Destinado à tirar dúvidas e reportar erros nas scripts!\n\n"
                 "**<a:denuncia:1384574096557346916> Denúncia:**\n"
                 "• Destinado à denúncia de membros!\n\n"
-                ""
-                "**⚠️ LIMITE: 1 TICKET POR USUÁRIO**\n"
                 "Pedimos encarecidamente que não abram tickets com o intuito de brincadeiras.\n"
                 "Sejam empáticos com o próximo."
             ),
